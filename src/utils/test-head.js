@@ -5,26 +5,25 @@
  * @module utils/test-head
  */
 
-const { combineReducers } = require("redux");
-const sourceMaps = require("devtools-source-map");
-const reducers = require("../reducers");
-const actions = require("../actions").default;
-const selectors = require("../selectors");
-const constants = require("../constants");
+import { combineReducers } from "redux";
+import sourceMaps from "devtools-source-map";
+import reducers from "../reducers";
+import actions from "../actions";
+import selectors from "../selectors";
 
-const configureStore = require("../utils/create-store");
+import configureStore from "../utils/create-store";
 
 /**
  * @memberof utils/test-head
  * @static
  */
-function createStore(client: any, initialState: any = {}) {
+function createStore(client: any, initialState: any = {}, sourceMapsMock: any) {
   return configureStore({
     log: false,
     makeThunkArgs: args => {
       return Object.assign({}, args, {
         client,
-        sourceMaps
+        sourceMaps: sourceMapsMock || sourceMaps
       });
     }
   })(combineReducers(reducers), initialState);
@@ -46,10 +45,27 @@ function makeSource(name: string, props: any = {}) {
   return Object.assign(
     {
       id: name,
+      loadedState: "loaded",
       url: `http://localhost:8000/examples/${name}`
     },
     props
   );
+}
+
+function makeFuncLocation(startLine) {
+  return {
+    start: {
+      line: startLine
+    }
+  };
+}
+
+function makeSymbolDeclaration(name: string, line: number) {
+  return {
+    id: `${name}:${line}`,
+    name,
+    location: makeFuncLocation(line)
+  };
 }
 
 /**
@@ -67,13 +83,13 @@ function waitForState(store: any, predicate: any) {
   });
 }
 
-module.exports = {
+export {
   actions,
-  constants,
   selectors,
   reducers,
   createStore,
   commonLog,
   makeSource,
+  makeSymbolDeclaration,
   waitForState
 };

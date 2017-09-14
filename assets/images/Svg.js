@@ -1,19 +1,27 @@
 const React = require("react");
 const InlineSVG = require("svg-inline-react");
+const { isDevelopment } = require("devtools-config");
 
 const svg = {
   "angle-brackets": require("./angle-brackets.svg"),
+  angular: require("./angular.svg"),
   arrow: require("./arrow.svg"),
   backbone: require("./backbone.svg"),
   blackBox: require("./blackBox.svg"),
   breakpoint: require("./breakpoint.svg"),
+  "column-breakpoint": require("./column-breakpoint.svg"),
   "case-match": require("./case-match.svg"),
   close: require("./close.svg"),
+  dojo: require("./dojo.svg"),
   domain: require("./domain.svg"),
   file: require("./file.svg"),
   folder: require("./folder.svg"),
   globe: require("./globe.svg"),
   jquery: require("./jquery.svg"),
+  underscore: require("./underscore.svg"),
+  lodash: require("./lodash.svg"),
+  ember: require("./ember.svg"),
+  vuejs: require("./vuejs.svg"),
   "magnifying-glass": require("./magnifying-glass.svg"),
   "arrow-up": require("./arrow-up.svg"),
   "arrow-down": require("./arrow-down.svg"),
@@ -23,6 +31,8 @@ const svg = {
   prettyPrint: require("./prettyPrint.svg"),
   react: require("./react.svg"),
   "regex-match": require("./regex-match.svg"),
+  redux: require("./redux.svg"),
+  immutable: require("./immutable.svg"),
   resume: require("./resume.svg"),
   settings: require("./settings.svg"),
   stepIn: require("./stepIn.svg"),
@@ -34,21 +44,47 @@ const svg = {
   "whole-word-match": require("./whole-word-match.svg"),
   worker: require("./worker.svg"),
   "sad-face": require("./sad-face.svg"),
-  refresh: require("./refresh.svg")
+  refresh: require("./refresh.svg"),
+  webpack: require("./webpack.svg"),
+  node: require("./node.svg"),
+  express: require("./express.svg"),
+  pug: require("./pug.svg"),
+  extjs: require("./sencha-extjs.svg"),
+  showSources: require("./showSources.svg"),
+  showOutline: require("./showOutline.svg")
 };
 
-module.exports = function(name, props) {
-  // eslint-disable-line
+type SvgType = {
+  name: string,
+  clasName?: string,
+  onClick?: () => void,
+  "aria-label"?: string
+};
+
+function Svg({ name, className, onClick, "aria-label": ariaLabel }) {
   if (!svg[name]) {
-    throw new Error("Unknown SVG: " + name);
+    const error = `Unknown SVG: ${name}`;
+    if (isDevelopment()) {
+      throw new Error(error);
+    }
+
+    console.warn(error);
+    return;
   }
-  let className = name;
-  if (props && props.className) {
-    className = `${name} ${props.className}`;
-  }
+
+  className = `${name} ${className || ""}`;
   if (name === "subSettings") {
     className = "";
   }
-  props = Object.assign({}, props, { className, src: svg[name] });
-  return React.createElement(InlineSVG, props);
-};
+  const props = {
+    className,
+    onClick,
+    ["aria-label"]: ariaLabel,
+    src: svg[name]
+  };
+  return <InlineSVG {...props} />;
+}
+
+Svg.displayName = "Svg";
+
+module.exports = Svg;

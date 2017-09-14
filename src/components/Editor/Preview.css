@@ -8,7 +8,11 @@
   min-height: inherit;
   max-height: 200px;
   overflow: auto;
-  box-shadow: 1px 2px 4px 1px var(--theme-toolbar-background-alt);
+  box-shadow: 1px 2px 3px var(--popup-shadow-color);
+}
+
+.theme-dark .popover .preview {
+  box-shadow: 1px 2px 3px var(--popup-shadow-color);
 }
 
 .popover .preview .header {
@@ -24,17 +28,20 @@
   color: var(--theme-highlight-blue);
   text-decoration: underline;
 }
-.popover .preview .header .link:hover {
-  cursor: pointer;
+
+.selection,
+.debug-expression.selection {
+  background-color: var(--theme-highlight-yellow);
 }
 
-.selected-token {
-  background-color: var(--theme-search-overlays-semitransparent);
-  color: var(--theme-selection-color);
+.theme-dark .selection,
+.theme-dark .debug-expression.selection {
+  background-color: #743884;
 }
 
-.selected-token:hover {
-  cursor: pointer;
+.theme-dark .cm-s-mozilla .selection,
+.theme-dark .cm-s-mozilla .debug-expression.selection {
+  color: #e7ebee;
 }
 
 .popover .preview .function-signature {
@@ -46,7 +53,7 @@
 }
 
 .theme-dark .popover .preview .arrow svg {
-  fill: var(--theme-comment);
+  fill: var(--theme-content-color3);
 }
 
 .tooltip {
@@ -56,7 +63,7 @@
 
 .tooltip .preview {
   background: var(--theme-toolbar-background);
-  max-width: 350px;
+  max-width: inherit;
   min-height: 80px;
   border: 1px solid var(--theme-splitter-color);
   box-shadow: 1px 2px 4px 1px var(--theme-toolbar-background-alt);
@@ -65,7 +72,6 @@
   min-height: inherit;
   max-height: 200px;
   overflow: auto;
-  cursor: pointer;
 }
 
 .theme-dark .tooltip .preview {
@@ -75,4 +81,33 @@
 .tooltip .gap {
   height: 4px;
   padding-top: 4px;
+}
+
+.add-to-expression-bar {
+  border: 1px solid var(--theme-splitter-color);
+  border-top: none;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  font-size: 14px;
+  line-height: 30px;
+  background: var(--theme-toolbar-background);
+  color: var(--theme-comment-alt);
+  padding: 0 4px;
+}
+
+.add-to-expression-bar .prompt {
+  width: 1em;
+}
+
+.add-to-expression-bar .expression-to-save-label {
+  width: calc(100% - 4em);
+}
+
+.add-to-expression-bar .expression-to-save-button {
+  font-size: 14px;
+  color: var(--theme-content-color3);
 }

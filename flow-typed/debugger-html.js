@@ -34,8 +34,20 @@ declare module "debugger-html" {
   declare type Location = {
     sourceId: SourceId,
     line: number,
-    column?: number,
+    column: ?number,
     sourceUrl?: string
+  };
+
+  declare type PendingLocation = {
+    line: number,
+    column: ?number,
+    sourceUrl?: string
+  };
+
+  declare type ASTLocation = {
+    name: ?string,
+    column: ?number,
+    line: number
   };
 
   /**
@@ -47,8 +59,11 @@ declare module "debugger-html" {
   declare type Breakpoint = {
     id: BreakpointId,
     location: Location,
+    astLocation: ?ASTLocation,
+    generatedLocation: Location,
     loading: boolean,
     disabled: boolean,
+    hidden: boolean,
     text: string,
     condition: ?string
   };
@@ -62,6 +77,22 @@ declare module "debugger-html" {
   declare type BreakpointResult = {
     id: ActorId,
     actualLocation: Location
+  };
+
+  /**
+ * PendingBreakpoint
+ *
+ * @memberof types
+ * @static
+ */
+  declare type PendingBreakpoint = {
+    location: PendingLocation,
+    astLocaton: ASTLocation,
+    generatedLocation: PendingLocation,
+    loading: boolean,
+    disabled: boolean,
+    text: string,
+    condition: ?string
   };
 
   /**
@@ -86,6 +117,20 @@ declare module "debugger-html" {
     // FIXME Define this type more clearly
     this: Object,
     framework?: string
+  };
+
+  /**
+   * ContextMenuItem
+   *
+   * @memberof types
+   * @static
+   */
+  declare type ContextMenuItem = {
+    id: string,
+    label: string,
+    accesskey: string,
+    disabled: boolean,
+    click: Function
   };
 
   /**
@@ -125,7 +170,6 @@ declare module "debugger-html" {
   declare type Pause = {
     frames: Frame[],
     why: Why,
-    getIn: (string[]) => any,
     loadedObjects?: LoadedObject[]
   };
   /**
@@ -166,21 +210,15 @@ declare module "debugger-html" {
    */
   declare type Source = {
     id: SourceId,
-    url?: string,
+    url: string,
     sourceMapURL?: string,
     isBlackBoxed: boolean,
-    isPrettyPrinted: boolean
-  };
-
-  /**
-   * SourceText
-   * @memberof types
-   * @static
-   */
-  declare type SourceText = {
-    id: string,
-    text: string,
-    contentType: string
+    isPrettyPrinted: boolean,
+    isWasm: boolean,
+    text?: string,
+    contentType?: string,
+    error?: string,
+    loadedState: "unloaded" | "loading" | "loaded"
   };
 
   /**
@@ -205,6 +243,7 @@ declare module "debugger-html" {
       arguments: Array<Object>,
       variables: Object
     },
+    object: Object,
     function: {
       actor: ActorId,
       class: string,

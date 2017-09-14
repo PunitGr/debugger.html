@@ -8,22 +8,25 @@ import type {
   Actions
 } from "./types";
 
-const { createPause, createSource } = require("./create");
-const { isEnabled } = require("devtools-config");
+import { createPause, createSource } from "./create";
+import { isEnabled } from "devtools-config";
 
 const CALL_STACK_PAGE_SIZE = 1000;
 
 type Dependencies = {
   threadClient: ThreadClient,
-  actions: Actions
+  actions: Actions,
+  supportsWasm: boolean
 };
 
 let threadClient: ThreadClient;
 let actions: Actions;
+let supportsWasm: boolean;
 
 function setupEvents(dependencies: Dependencies) {
   threadClient = dependencies.threadClient;
   actions = dependencies.actions;
+  supportsWasm = dependencies.supportsWasm;
 
   if (threadClient) {
     Object.keys(clientEvents).forEach(eventName => {
@@ -55,7 +58,7 @@ function resumed(_: "resumed", packet: ResumedPacket) {
 }
 
 function newSource(_: "newSource", { source }: SourcePacket) {
-  actions.newSource(createSource(source));
+  actions.newSource(createSource(source, { supportsWasm }));
 
   if (isEnabled("eventListeners")) {
     actions.fetchEventListeners();
@@ -68,7 +71,4 @@ const clientEvents = {
   newSource
 };
 
-module.exports = {
-  setupEvents,
-  clientEvents
-};
+export { setupEvents, clientEvents };

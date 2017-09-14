@@ -1,60 +1,85 @@
 // @flow
-import constants from "../constants";
-import {
-  getSource,
-  getProjectSearchState,
-  getFileSearchState
-} from "../selectors";
+import { getSource, getActiveSearch } from "../selectors";
 import type { ThunkArgs } from "./types";
+import type { ActiveSearchType, SymbolSearchType } from "../reducers/ui";
+import { clearSourceSearchQuery } from "./source-search";
 
-export function toggleProjectSearch(toggleValue?: boolean) {
-  return ({ dispatch, getState }: ThunkArgs) => {
-    if (toggleValue != null) {
-      dispatch({
-        type: constants.TOGGLE_PROJECT_SEARCH,
-        value: toggleValue
-      });
-    } else {
-      dispatch({
-        type: constants.TOGGLE_PROJECT_SEARCH,
-        value: !getProjectSearchState(getState())
-      });
+export function closeActiveSearch() {
+  return ({ getState, dispatch }: ThunkArgs) => {
+    const activeSearch = getActiveSearch(getState());
+
+    if (activeSearch == "source") {
+      dispatch(clearSourceSearchQuery());
     }
+
+    dispatch({
+      type: "TOGGLE_ACTIVE_SEARCH",
+      value: null
+    });
   };
 }
 
-export function toggleFileSearch(toggleValue?: boolean) {
+export function setActiveSearch(activeSearch?: ActiveSearchType) {
   return ({ dispatch, getState }: ThunkArgs) => {
-    if (toggleValue != null) {
-      dispatch({
-        type: constants.TOGGLE_FILE_SEARCH,
-        value: toggleValue
-      });
-    } else {
-      dispatch({
-        type: constants.TOGGLE_FILE_SEARCH,
-        value: !getFileSearchState(getState())
-      });
+    const activeSearchState = getActiveSearch(getState());
+    if (activeSearchState === activeSearch) {
+      return;
     }
+
+    dispatch({
+      type: "TOGGLE_ACTIVE_SEARCH",
+      value: activeSearch
+    });
+  };
+}
+
+export function toggleFrameworkGrouping(toggleValue: boolean) {
+  return ({ dispatch, getState }: ThunkArgs) => {
+    dispatch({
+      type: "TOGGLE_FRAMEWORK_GROUPING",
+      value: toggleValue
+    });
+  };
+}
+
+export function setSelectedSymbolType(symbolType: SymbolSearchType) {
+  return ({ dispatch, getState }: ThunkArgs) => {
+    dispatch({
+      type: "SET_SYMBOL_SEARCH_TYPE",
+      symbolType
+    });
   };
 }
 
 export function setFileSearchQuery(query: string) {
   return {
-    type: constants.UPDATE_FILE_SEARCH_QUERY,
+    type: "UPDATE_FILE_SEARCH_QUERY",
     query
   };
 }
 
+export function updateSearchResults(results: Object) {
+  return {
+    type: "UPDATE_SEARCH_RESULTS",
+    results
+  };
+}
+
 export function toggleFileSearchModifier(modifier: string) {
-  return { type: constants.TOGGLE_FILE_SEARCH_MODIFIER, modifier };
+  return { type: "TOGGLE_FILE_SEARCH_MODIFIER", modifier };
 }
 
 export function showSource(sourceId: string) {
   return ({ dispatch, getState }: ThunkArgs) => {
     const source = getSource(getState(), sourceId);
+
     dispatch({
-      type: constants.SHOW_SOURCE,
+      type: "SHOW_SOURCE",
+      sourceUrl: ""
+    });
+
+    dispatch({
+      type: "SHOW_SOURCE",
       sourceUrl: source.get("url")
     });
   };
@@ -62,8 +87,40 @@ export function showSource(sourceId: string) {
 
 export function togglePaneCollapse(position: string, paneCollapsed: boolean) {
   return {
-    type: constants.TOGGLE_PANE,
+    type: "TOGGLE_PANE",
     position,
     paneCollapsed
+  };
+}
+
+/**
+ * @memberof actions/sources
+ * @static
+ */
+export function highlightLineRange(location: {
+  start: number,
+  end: number,
+  sourceId: number
+}) {
+  return {
+    type: "HIGHLIGHT_LINES",
+    location
+  };
+}
+
+/**
+ * @memberof actions/sources
+ * @static
+ */
+export function clearHighlightLineRange() {
+  return {
+    type: "CLEAR_HIGHLIGHT_LINES"
+  };
+}
+
+export function toggleConditionalBreakpointPanel(line: null | number) {
+  return {
+    type: "TOGGLE_CONDITIONAL_BREAKPOINT_PANEL",
+    line
   };
 }

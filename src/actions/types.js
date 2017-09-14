@@ -6,10 +6,15 @@ import type {
   Expression,
   LoadedObject,
   Location,
-  SourceText,
   Frame,
+  Scope,
   Why
 } from "debugger-html";
+
+import type { State } from "../reducers/types";
+import type { ActiveSearchType } from "../reducers/ui";
+
+import type { SymbolDeclaration, AstLocation } from "../utils/parser";
 
 /**
  * Flow types
@@ -24,11 +29,13 @@ import type {
   * @typedef {Object} ThunkArgs
   */
 export type ThunkArgs = {
-  dispatch: () => Promise<any>,
-  getState: () => any,
+  dispatch: (action: any) => Promise<any>,
+  getState: () => State,
   client: any,
   sourceMaps: any
 };
+
+export type Thunk = ThunkArgs => any;
 
 export type ActionType = Object | Function;
 
@@ -47,7 +54,19 @@ export type AsyncStatus = "start" | "done" | "error";
 type BreakpointResult = {
   actualLocation: Location,
   id: string,
-  text: string
+  text: string,
+  generatedLocation: Location
+};
+
+type AddBreakpointResult = {
+  previousLocation: Location,
+  breakpoint: Breakpoint
+};
+
+type ProjectTextSearchResult = {
+  sourceId: string,
+  filepath: string,
+  matches: Array<any>
 };
 
 type BreakpointAction =
@@ -57,7 +76,7 @@ type BreakpointAction =
       condition: string,
       status: AsyncStatus,
       error: string,
-      value: BreakpointResult
+      value: AddBreakpointResult
     }
   | {
       type: "REMOVE_BREAKPOINT",
@@ -97,7 +116,7 @@ type SourceAction =
       source: Source,
       status: AsyncStatus,
       error: string,
-      value: SourceText
+      value: Source
     }
   | {
       type: "BLACKBOX",
@@ -113,26 +132,28 @@ type SourceAction =
       error: string,
       value: {
         isPrettyPrinted: boolean,
-        sourceText: SourceText,
+        source: Source,
         frames: Frame[]
       }
     }
-  | { type: "CLOSE_TAB", url: string };
+  | { type: "MOVE_TAB", url: string, tabIndex: number }
+  | { type: "CLOSE_TAB", url: string, tabs: any }
+  | { type: "CLOSE_TABS", urls: string[], tabs: any };
 
 export type panelPositionType = "start" | "end";
 
 type UIAction =
   | {
-      type: "TOGGLE_FILE_SEARCH",
-      value: boolean
-    }
-  | {
-      type: "TOGGLE_PROJECT_SEARCH",
-      value: boolean
+      type: "TOGGLE_ACTIVE_SEARCH",
+      value: ?ActiveSearchType
     }
   | {
       type: "TOGGLE_FILE_SEARCH_MODIFIER",
       modifier: "caseSensitive" | "wholeWord" | "regexMatch"
+    }
+  | {
+      type: "TOGGLE_FRAMEWORK_GROUPING",
+      value: boolean
     }
   | {
       type: "SHOW_SOURCE",
@@ -154,6 +175,7 @@ type PauseAction =
         frame: Frame,
         isInterrupted?: boolean
       },
+      scopes: Scope[],
       frames: Frame[],
       selectedFrameId: string,
       loadedObjects: LoadedObject[]
@@ -163,8 +185,8 @@ type PauseAction =
       shouldPauseOnExceptions: boolean,
       shouldIgnoreCaughtExceptions: boolean
     }
-  | { type: "COMMAND", value: void }
-  | { type: "SELECT_FRAME", frame: Frame }
+  | { type: "COMMAND", value: { type: string } }
+  | { type: "SELECT_FRAME", frame: Frame, scopes: Scope[] }
   | {
       type: "LOAD_OBJECT_PROPERTIES",
       objectId: string,
@@ -176,22 +198,19 @@ type PauseAction =
       type: "ADD_EXPRESSION",
       id: number,
       input: string,
-      value: string,
-      visible: boolean
+      value: string
     }
   | {
       type: "EVALUATE_EXPRESSION",
       input: string,
       status: string,
       value: Object,
-      visible: boolean,
       "@@dispatch/promise": any
     }
   | {
       type: "UPDATE_EXPRESSION",
       expression: Expression,
-      input: string,
-      visible: boolean
+      input: string
     }
   | {
       type: "DELETE_EXPRESSION",
@@ -199,6 +218,40 @@ type PauseAction =
     };
 
 type NavigateAction = { type: "NAVIGATE", url: string };
+
+type ASTAction =
+  | {
+      type: "SET_SYMBOLS",
+      source: Source,
+      symbols: SymbolDeclaration[]
+    }
+  | {
+      type: "OUT_OF_SCOPE_LOCATIONS",
+      locations: AstLocation[]
+    }
+  | {
+      type: "SET_PREVIEW",
+      value: {
+        expression: string,
+        result: any,
+        location: AstLocation,
+        tokenPos: any,
+        cursorPos: any
+      }
+    }
+  | {
+      type: "CLEAR_SELECTION"
+    };
+
+export type ProjectTextSearchAction = {
+  type: "ADD_QUERY",
+  query: string
+} & {
+  type: "ADD_SEARCH_RESULT",
+  result: ProjectTextSearchResult
+} & {
+    type: "CLEAR_QUERY"
+  };
 
 /**
  * Actions: Source, Breakpoint, and Navigation
@@ -211,4 +264,5 @@ export type Action =
   | BreakpointAction
   | PauseAction
   | NavigateAction
-  | UIAction;
+  | UIAction
+  | ASTAction;

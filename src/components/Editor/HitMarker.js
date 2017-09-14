@@ -1,15 +1,20 @@
 // @flow
-import { Component, PropTypes } from "react";
+import { Component } from "react";
 
-let markerEl = document.createElement("div");
+const markerEl = document.createElement("div");
 
 function makeMarker() {
-  let marker = markerEl.cloneNode(true);
+  const marker = markerEl.cloneNode(true);
   marker.className = "editor hit-marker";
   return marker;
 }
 
 class HitMarker extends Component {
+  props: {
+    hitData: { [string]: any },
+    editor: any
+  };
+
   addMarker() {
     const hitData = this.props.hitData;
     const line = hitData.line - 1;
@@ -27,10 +32,6 @@ class HitMarker extends Component {
   }
 
   componentDidMount() {
-    if (!this.props.editor) {
-      return;
-    }
-
     this.addMarker();
   }
 
@@ -39,10 +40,6 @@ class HitMarker extends Component {
   }
 
   componentWillUnmount() {
-    if (!this.props.editor) {
-      return;
-    }
-
     const hitData = this.props.hitData;
     const line = hitData.line - 1;
 
@@ -56,10 +53,5 @@ class HitMarker extends Component {
 }
 
 HitMarker.displayName = "HitMarker";
-
-HitMarker.propTypes = {
-  hitData: PropTypes.object.isRequired,
-  editor: PropTypes.object.isRequired
-};
 
 export default HitMarker;

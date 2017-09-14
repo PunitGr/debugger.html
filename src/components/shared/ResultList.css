@@ -1,11 +1,9 @@
-
 .result-list {
   list-style: none;
-  width: 100%;
-  background-color: var(--theme-toolbar-background);
   margin: 0px;
   padding: 0px;
   overflow: auto;
+  width: calc(100% - 1px); /* 1px fixes the hidden right border */
 }
 
 .result-list.big {
@@ -19,14 +17,10 @@
 
 .result-list li {
   color: var(--theme-body-color);
-  background-color: var(--theme-tab-toolbar-background);
   padding: 4px 13px;
   display: flex;
   justify-content: space-between;
-}
-
-.result-list li:first-child {
-  border-top: none;
+  border: 1px solid transparent;
 }
 
 .result-list.big li {
@@ -37,21 +31,19 @@
 
 .result-list li:hover {
   background: var(--theme-tab-toolbar-background);
-  cursor: pointer;
 }
 
 .result-list li.selected {
-  border: 1px solid var(--theme-selection-background);
+  border-color: var(--theme-selection-background);
 }
 
-.result-list.big li.selected {
-  padding-left: 9px;
-  padding-top: 9px;
-}
-
-.search-bar .result-list li.selected {
+.result-list.small li.selected {
   background-color: var(--theme-selection-background);
   color: white;
+}
+
+.theme-dark .result-list.small li.selected {
+  background-color: var(--theme-body-background);
 }
 
 .result-list li .title {

@@ -12,8 +12,10 @@ const args = [
   "--bracket-spacing=true",
   "--write",
   "*.js",
+  "*.json",
   "src/*.js",
   "src/*/*.js",
+  "src/components/**/*.css",
   "src/*/!(mochitest)**/*.js",
   "src/*/!(mochitest)*/**/*.js"
 ];
@@ -25,7 +27,8 @@ const prettierProc = spawn(prettierCmd, prettierArgs);
 prettierProc.stdout.on("data", data => console.log(`${data}`));
 prettierProc.stderr.on("data", data => console.log(`stderr: ${data}`));
 prettierProc.on("close", code =>
-  console.log(`prettier exited with code ${code}`));
+  console.log(`prettier exited with code ${code}`)
+);
 prettierProc.on("error", error => {
   if (error.code == "ENOENT") {
     console.log(`Hmm, could not find the path ${cmd}.`);

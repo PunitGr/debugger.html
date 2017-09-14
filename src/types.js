@@ -12,11 +12,6 @@ export type Expression = {
   visible: boolean
 };
 
-export type TokenResolution = {
-  expression?: Object | null,
-  inScope: boolean
-};
-
 export type Mode =
   | String
   | {
@@ -30,12 +25,12 @@ export type Mode =
 
 export type {
   Breakpoint,
+  PendingBreakpoint,
   Frame,
   Grip,
   LoadedObject,
   Location,
   Source,
-  SourceText,
   Pause,
   Why
 } from "debugger-html";

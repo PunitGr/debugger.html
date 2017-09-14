@@ -1,12 +1,14 @@
-import { DOM as dom, PropTypes, Component } from "react";
-const ReactDOM = require("react-dom");
+import React, { PropTypes, Component } from "react";
+import ReactDOM from "react-dom";
 import classNames from "classnames";
+import BracketArrow from "./BracketArrow";
 
-require("./Popover.css");
+import "./Popover.css";
 
 class Popover extends Component {
   constructor() {
     super();
+    this.onMouseLeave = this.onMouseLeave.bind(this);
     this.state = {
       left: 0,
       top: 0
@@ -15,65 +17,116 @@ class Popover extends Component {
 
   componentDidMount() {
     const { type } = this.props;
-    const { left, top, dir } = type == "popover"
-      ? this.getPopoverCoords()
-      : this.getTooltipCoords();
+    const { left, top, orientation, targetMid } =
+      type == "popover" ? this.getPopoverCoords() : this.getTooltipCoords();
 
     // eslint-disable-next-line react/no-did-mount-set-state
-    this.setState({ left, top, dir });
+    this.setState({ left, top, orientation, targetMid });
+  }
+
+  calculateLeft(target, editor, popover) {
+    const leftOffset = target.width / 2 - popover.width / 5;
+    const estimatedLeft = target.left + leftOffset;
+    const estimatedRight = estimatedLeft + popover.width;
+    const isOverflowingRight = estimatedRight > editor.right;
+    if (isOverflowingRight) {
+      const adjustedLeft = editor.right - popover.width - 8;
+      return adjustedLeft;
+    }
+    return estimatedLeft;
+  }
+
+  calculateVerticalOrientation(target, editor, popover) {
+    const estimatedBottom = target.bottom + popover.height;
+
+    return estimatedBottom > editor.bottom ? "up" : "down";
   }
 
   getPopoverCoords() {
-    const el = ReactDOM.findDOMNode(this);
-    const { width, height } = el.getBoundingClientRect();
-    const {
-      left: targetLeft,
-      width: targetWidth,
-      bottom: targetBottom,
-      top: targetTop
-    } = this.props.target.getBoundingClientRect();
+    const popover = ReactDOM.findDOMNode(this);
+    const popoverRect = popover.getBoundingClientRect();
 
-    // width division corresponds to calc in Popover.css
-    const left = targetLeft + targetWidth / 2 - width / 5;
-    const dir = targetBottom + height > window.innerHeight ? "up" : "down";
-    const top = dir == "down" ? targetBottom : targetTop - height;
+    const editor = document.querySelector(".editor-wrapper");
+    const editorRect = editor.getBoundingClientRect();
 
-    return { left, top, dir };
+    const targetRect = this.props.targetPosition;
+
+    const popoverLeft = this.calculateLeft(targetRect, editorRect, popoverRect);
+    const orientation = this.calculateVerticalOrientation(
+      targetRect,
+      editorRect,
+      popoverRect
+    );
+    const top =
+      orientation == "down"
+        ? targetRect.bottom
+        : targetRect.top - popoverRect.height;
+
+    const targetMid = targetRect.left - popoverLeft + targetRect.width / 2 - 8;
+
+    return { left: popoverLeft, top, orientation, targetMid };
   }
 
   getTooltipCoords() {
-    const el = ReactDOM.findDOMNode(this);
-    const { height } = el.getBoundingClientRect();
-    const {
-      left: targetLeft,
-      width: targetWidth,
-      top: targetTop
-    } = this.props.target.getBoundingClientRect();
+    const tooltip = ReactDOM.findDOMNode(this);
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const targetRect = this.props.targetPosition;
 
-    const left = targetLeft + targetWidth / 4 - 10;
-    const top = targetTop - height;
+    const editor = document.querySelector(".editor-wrapper");
+    const editorRect = editor.getBoundingClientRect();
 
-    return { left, top, dir: "up" };
+    const left = this.calculateLeft(targetRect, editorRect, tooltipRect);
+    const top = targetRect.top - tooltipRect.height;
+
+    return { left, top, orientation: "up", targetMid: 0 };
   }
 
   getChildren() {
     const { children } = this.props;
-    const { dir } = this.state;
-    const gap = dom.div({ className: "gap", key: "gap" });
-    return dir === "up" ? [children, gap] : [gap, children];
+    const { orientation } = this.state;
+    const gap = <div className="gap" key="gap" />;
+    return orientation === "up" ? [children, gap] : [gap, children];
+  }
+
+  getPopoverArrow(orientation, left) {
+    const arrowOrientation = orientation === "up" ? "down" : "up";
+
+    const arrowProp = arrowOrientation === "up" ? "top" : "bottom";
+    const arrowPropValue = arrowOrientation === "up" ? -7 : 5;
+
+    const arrowProps = {
+      orientation: arrowOrientation,
+      left,
+      [arrowProp]: arrowPropValue
+    };
+
+    return <BracketArrow {...arrowProps} />;
+  }
+
+  onMouseLeave(e) {
+    const { onMouseLeave } = this.props;
+
+    if (e.target.className.match(/(bracket-arrow|gap)/)) {
+      return;
+    }
+
+    onMouseLeave();
   }
 
   renderPopover() {
-    const { onMouseLeave } = this.props;
-    const { top, left, dir } = this.state;
+    const { top, left, orientation, targetMid } = this.state;
 
-    return dom.div(
-      {
-        className: classNames("popover", { up: dir === "up" }),
-        onMouseLeave,
-        style: { top, left }
-      },
-      this.getChildren()
+    const arrow = this.getPopoverArrow(orientation, targetMid);
+
+    return (
+      <div
+        className={classNames("popover", { up: orientation === "up" })}
+        onMouseLeave={this.onMouseLeave}
+        style={{ top, left }}
+      >
+        {arrow}
+        {this.getChildren()}
+      </div>
     );
   }
 
@@ -81,13 +134,14 @@ class Popover extends Component {
     const { onMouseLeave } = this.props;
     const { top, left } = this.state;
 
-    return dom.div(
-      {
-        className: "tooltip",
-        onMouseLeave,
-        style: { top, left }
-      },
-      this.getChildren()
+    return (
+      <div
+        className="tooltip"
+        onMouseLeave={onMouseLeave}
+        style={{ top, left }}
+      >
+        {this.getChildren()}
+      </div>
     );
   }
 
@@ -104,6 +158,7 @@ class Popover extends Component {
 
 Popover.propTypes = {
   target: PropTypes.object,
+  targetPosition: PropTypes.object,
   children: PropTypes.object,
   onMouseLeave: PropTypes.func,
   type: PropTypes.string

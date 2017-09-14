@@ -1,6 +1,5 @@
 // @flow
-import React from "react";
-const { DOM: dom, PropTypes, Component } = React;
+import React, { Component } from "react";
 import { bindActionCreators } from "redux";
 import { connect } from "react-redux";
 import actions from "../../actions";
@@ -8,8 +7,27 @@ import { getEventListeners, getBreakpoint } from "../../selectors";
 import CloseButton from "../shared/Button/Close";
 import "./EventListeners.css";
 
+import type { Breakpoint, Location, SourceId } from "debugger-html";
+
+type Listener = {
+  selector: string,
+  type: string,
+  sourceId: SourceId,
+  line: number,
+  breakpoint: ?Breakpoint
+};
+
 class EventListeners extends Component {
   renderListener: Function;
+
+  props: {
+    listeners: Array<Listener>,
+    selectSource: (SourceId, { line: number }) => void,
+    addBreakpoint: ({ sourceId: SourceId, line: number }) => void,
+    enableBreakpoint: Location => void,
+    disableBreakpoint: Location => void,
+    removeBreakpoint: Location => void
+  };
 
   constructor(...args) {
     super(...args);
@@ -21,25 +39,28 @@ class EventListeners extends Component {
     const checked = breakpoint && !breakpoint.disabled;
     const location = { sourceId, line };
 
-    return dom.div(
-      {
-        className: "listener",
-        onClick: () => this.props.selectSource(sourceId, { line }),
-        key: `${type}.${selector}.${sourceId}.${line}`
-      },
-      dom.input({
-        type: "checkbox",
-        className: "listener-checkbox",
-        checked,
-        onChange: () => this.handleCheckbox(breakpoint, location)
-      }),
-      dom.span({ className: "type" }, type),
-      dom.span({ className: "selector" }, selector),
-      breakpoint
-        ? CloseButton({
-            handleClick: ev => this.removeBreakpoint(ev, breakpoint)
-          })
-        : ""
+    return (
+      <div
+        className="listener"
+        onClick={() => this.props.selectSource(sourceId, { line })}
+        key={`${type}.${selector}.${sourceId}.${line}`}
+      >
+        <input
+          type="checkbox"
+          className="listener-checkbox"
+          checked={checked}
+          onChange={() => this.handleCheckbox(breakpoint, location)}
+        />
+        <span className="type">{type}</span>
+        <span className="selector">{selector}</span>
+        {breakpoint ? (
+          <CloseButton
+            handleClick={ev => this.removeBreakpoint(ev, breakpoint)}
+          />
+        ) : (
+          ""
+        )}
+      </div>
     );
   }
 
@@ -66,23 +87,13 @@ class EventListeners extends Component {
 
   render() {
     const { listeners } = this.props;
-    return dom.div(
-      {
-        className: "pane event-listeners"
-      },
-      listeners.map(this.renderListener)
+    return (
+      <div className="pane event-listeners">
+        {listeners.map(this.renderListener)}
+      </div>
     );
   }
 }
-
-EventListeners.propTypes = {
-  listeners: PropTypes.array.isRequired,
-  selectSource: PropTypes.func.isRequired,
-  addBreakpoint: PropTypes.func.isRequired,
-  enableBreakpoint: PropTypes.func.isRequired,
-  disableBreakpoint: PropTypes.func.isRequired,
-  removeBreakpoint: PropTypes.func.isRequired
-};
 
 EventListeners.displayName = "EventListeners";
 

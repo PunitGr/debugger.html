@@ -29,7 +29,7 @@ DebuggerPanel.prototype = {
     } = await this.panelWin.Debugger.bootstrap({
       threadClient: this.toolbox.threadClient,
       tabTarget: this.toolbox.target,
-      debuggerClient: this.toolbox.target._client,
+      debuggerClient: this.toolbox.target.client,
       sourceMaps: this.toolbox.sourceMapService
     });
 
@@ -65,7 +65,6 @@ DebuggerPanel.prototype = {
       };
     }
 
-    frames = frames.toJS();
     const selectedFrame = this._selectors.getSelectedFrame(this._getState());
     const selected = frames.findIndex(frame => frame.id == selectedFrame.id);
 

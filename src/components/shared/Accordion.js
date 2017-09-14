@@ -1,5 +1,5 @@
 // @flow
-import React, { DOM as dom, PropTypes, createElement } from "react";
+import React, { createElement, Component } from "react";
 import Svg from "./Svg";
 
 import "./Accordion.css";
@@ -9,8 +9,8 @@ type AccordionItem = {
   component(): any,
   header: string,
   opened: boolean,
-  onToggle?: () => any,
-  shouldOpen?: () => any
+  onToggle?: () => void,
+  shouldOpen?: () => void
 };
 
 type Props = { items: Array<Object> };
@@ -20,8 +20,10 @@ type AccordionState = {
   created: boolean[]
 };
 
-class Accordion extends React.Component {
+class Accordion extends Component {
   state: AccordionState;
+
+  props: Props;
 
   constructor(props: Props) {
     super();
@@ -70,40 +72,36 @@ class Accordion extends React.Component {
       .toLowerCase()
       .replace(/\s/g, "-")}-pane`;
 
-    return dom.div(
-      { className: containerClassName, key: i },
-      dom.div(
-        { className: "_header", onClick: () => this.handleHeaderClick(i) },
-        Svg("arrow", { className: opened[i] ? "expanded" : "" }),
-        item.header,
-        item.buttons
-          ? dom.div({ className: "header-buttons" }, item.buttons)
-          : null
-      ),
-      created[i] || opened[i]
-        ? dom.div(
-            {
-              className: "_content",
-              style: { display: opened[i] ? "block" : "none" }
-            },
-            createElement(item.component, item.componentProps || {})
-          )
-        : null
+    return (
+      <div className={containerClassName} key={i}>
+        <div className="_header" onClick={() => this.handleHeaderClick(i)}>
+          <Svg name="arrow" className={opened[i] ? "expanded" : ""} />
+          {item.header}
+          {item.buttons ? (
+            <div className="header-buttons">{item.buttons}</div>
+          ) : null}
+        </div>
+        {created[i] || opened[i] ? (
+          <div
+            className="_content"
+            style={{ display: opened[i] ? "block" : "none" }}
+          >
+            {createElement(item.component, item.componentProps || {})}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
   render() {
-    return dom.div(
-      { className: "accordion" },
-      this.props.items.map(this.renderContainer)
+    return (
+      <div className="accordion">
+        {this.props.items.map(this.renderContainer)}
+      </div>
     );
   }
 }
 
 Accordion.displayName = "Accordion";
-
-Accordion.propTypes = {
-  items: PropTypes.array.isRequired
-};
 
 export default Accordion;

@@ -1,4 +1,14 @@
-import toPairs from "lodash/toPairs";
+// @flow
+
+import { toPairs } from "lodash";
+import { get } from "lodash";
+import type { Frame, Pause, Scope } from "debugger-html";
+
+type ScopeData = {
+  name: string,
+  path: string,
+  contents: Object[] | Object
+};
 
 // Create the tree nodes representing all the variables and arguments
 // for the bindings from a scope.
@@ -13,25 +23,14 @@ function getBindingVariables(bindings, parentName) {
   }));
 }
 
-// Support dehydrating immutable objects, while ignoring
-// primitive values like strings, numbers...
-function dehydrateValue(value) {
-  if (typeof value == "object" && !!value && value.toJS) {
-    value = value.toJS();
-  }
+export function getSpecialVariables(pauseInfo: Pause, path: string) {
+  const thrown = get(pauseInfo, "why.frameFinished.throw", undefined);
 
-  return value;
-}
-
-export function getSpecialVariables(pauseInfo, path) {
-  let thrown = pauseInfo.getIn(["why", "frameFinished", "throw"], undefined);
-
-  let returned = pauseInfo.getIn(["why", "frameFinished", "return"], undefined);
+  const returned = get(pauseInfo, "why.frameFinished.return", undefined);
 
   const vars = [];
 
   if (thrown !== undefined) {
-    thrown = dehydrateValue(thrown);
     vars.push({
       name: "<exception>",
       path: `${path}/<exception>`,
@@ -40,8 +39,6 @@ export function getSpecialVariables(pauseInfo, path) {
   }
 
   if (returned !== undefined) {
-    returned = dehydrateValue(returned);
-
     // Do not display a return value of "undefined",
     if (!returned || !returned.type || returned.type !== "undefined") {
       vars.push({
@@ -55,7 +52,7 @@ export function getSpecialVariables(pauseInfo, path) {
   return vars;
 }
 
-function getThisVariable(frame, path) {
+function getThisVariable(frame: any, path: string) {
   const this_ = frame.this;
 
   if (!this_) {
@@ -69,12 +66,18 @@ function getThisVariable(frame, path) {
   };
 }
 
-export function getScopes(pauseInfo, selectedFrame) {
+export function getScopes(
+  pauseInfo: Pause,
+  selectedFrame: Frame,
+  selectedScope: ?Scope
+): ?(ScopeData[]) {
   if (!pauseInfo || !selectedFrame) {
     return null;
   }
 
-  let selectedScope = selectedFrame.scope;
+  // NOTE: it's possible that we're inspecting an old server
+  // that does not support getting frame scopes directly
+  selectedScope = selectedScope || selectedFrame.scope;
 
   if (!selectedScope) {
     return null;
@@ -83,7 +86,7 @@ export function getScopes(pauseInfo, selectedFrame) {
   const scopes = [];
 
   let scope = selectedScope;
-  let pausedScopeActor = pauseInfo.getIn(["frame", "scope"]).get("actor");
+  const pausedScopeActor = get(pauseInfo, "frame.scope.actor");
   let scopeIndex = 1;
 
   do {
@@ -106,7 +109,7 @@ export function getScopes(pauseInfo, selectedFrame) {
       }
 
       if (scope.actor === selectedScope.actor) {
-        let this_ = getThisVariable(selectedFrame, key);
+        const this_ = getThisVariable(selectedFrame, key);
 
         if (this_) {
           vars.push(this_);
@@ -138,27 +141,4 @@ export function getScopes(pauseInfo, selectedFrame) {
   } while ((scope = scope.parent)); // eslint-disable-line no-cond-assign
 
   return scopes;
-}
-
-/**
- * Returns variables that are visible from this scope.
- * TODO: returns global variables as well
- */
-export function getVisibleVariablesFromScope(pauseInfo, selectedFrame) {
-  const result = new Map();
-
-  const scopes = getScopes(pauseInfo, selectedFrame);
-  if (!scopes) {
-    return result;
-  }
-
-  // reverse so that the local variables shadow global variables
-  let scopeContents = scopes.reverse().map(scope => scope.contents);
-  scopeContents = [].concat(...scopeContents);
-
-  scopeContents.forEach(content => {
-    result.set(content.name || null, content);
-  });
-
-  return result;
 }

@@ -1,13 +1,15 @@
 // @flow
 
-const firefox = require("./firefox");
-const chrome = require("./chrome");
-const { prefs } = require("../utils/prefs");
-const {
+import * as firefox from "./firefox";
+import * as chrome from "./chrome";
+
+import { prefs, features } from "../utils/prefs";
+import { isFirefoxPanel } from "devtools-config";
+import {
   bootstrapApp,
   bootstrapStore,
   bootstrapWorkers
-} = require("../utils/bootstrap");
+} from "../utils/bootstrap";
 
 function loadFromPrefs(actions: Object) {
   const { pauseOnExceptions, ignoreCaughtExceptions } = prefs;
@@ -32,7 +34,7 @@ async function onConnect(connection: Object, services: Object) {
   const { store, actions, selectors } = bootstrapStore(commands, services);
 
   bootstrapWorkers();
-  await client.onConnect(connection, actions);
+  const { bpClients } = await client.onConnect(connection, actions);
   await loadFromPrefs(actions);
 
   window.getGlobalsForTesting = () => {
@@ -41,13 +43,25 @@ async function onConnect(connection: Object, services: Object) {
       actions,
       selectors,
       client: client.clientCommands,
-      connection
+      prefs,
+      features,
+      connection,
+      bpClients
     };
   };
+
+  if (!isFirefoxPanel()) {
+    console.group("Development Notes");
+    const baseUrl = "https://devtools-html.github.io/debugger.html";
+    const localDevelopmentUrl = `${baseUrl}/docs/local-development.html`;
+    console.log("Debugging Tips", localDevelopmentUrl);
+    console.log("getGlobalsForTesting", window.getGlobalsForTesting());
+    console.groupEnd();
+  }
 
   bootstrapApp(connection, { store, actions });
 
   return { store, actions, selectors, client: commands };
 }
 
-module.exports = { onConnect };
+export { onConnect };

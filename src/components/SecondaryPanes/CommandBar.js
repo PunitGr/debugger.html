@@ -1,9 +1,8 @@
 // @flow
-import { DOM as dom, PropTypes, Component } from "react";
-
-const { findDOMNode } = require("react-dom");
+import React, { Component, PropTypes } from "react";
 import { connect } from "react-redux";
 import { bindActionCreators } from "redux";
+import classnames from "classnames";
 import {
   getPause,
   getIsWaitingOnBreak,
@@ -11,12 +10,14 @@ import {
   getShouldIgnoreCaughtExceptions
 } from "../../selectors";
 import Svg from "../shared/Svg";
-import ImPropTypes from "react-immutable-proptypes";
 import { formatKeyShortcut } from "../../utils/text";
 import actions from "../../actions";
 import "./CommandBar.css";
 
-const { Services: { appinfo } } = require("devtools-modules");
+import { Services } from "devtools-modules";
+const { appinfo } = Services;
+
+import type { SourceRecord, SourcesMap } from "../../reducers/sources";
 
 const isMacOS = appinfo.OS === "Darwin";
 
@@ -66,37 +67,41 @@ function formatKey(action) {
   return formatKeyShortcut(key);
 }
 
-function handlePressAnimation(button) {
-  if (!button) {
-    return;
-  }
-
-  button.style.opacity = "0";
-  button.style.transform = "scale(1.3)";
-  setTimeout(() => {
-    if (button) {
-      button.style.opacity = "1";
-      button.style.transform = "none";
-    }
-  }, 200);
-}
-
 function debugBtn(onClick, type, className, tooltip, disabled = false) {
-  className = `${type} ${className}`;
-  return dom.button(
-    {
-      onClick,
-      className,
-      key: type,
-      "aria-label": tooltip,
-      title: tooltip,
-      disabled
-    },
-    Svg(type)
+  const props = {
+    onClick,
+    key: type,
+    "aria-label": tooltip,
+    title: tooltip,
+    disabled
+  };
+
+  return (
+    <button className={classnames(type, className)} {...props}>
+      <Svg name={type} />
+    </button>
   );
 }
 
+debugBtn.displayName = "CommandBarButton";
+
 class CommandBar extends Component {
+  props: {
+    sources: SourcesMap,
+    selectedSource: SourceRecord,
+    resume: () => void,
+    stepIn: () => void,
+    stepOut: () => void,
+    stepOver: () => void,
+    breakOnNext: () => void,
+    pause: any,
+    pauseOnExceptions: (boolean, boolean) => void,
+    shouldPauseOnExceptions: boolean,
+    shouldIgnoreCaughtExceptions: boolean,
+    isWaitingOnBreak: boolean,
+    horizontal: boolean
+  };
+
   componentWillUnmount() {
     const shortcuts = this.context.shortcuts;
     COMMANDS.forEach(action => shortcuts.off(getKey(action)));
@@ -128,10 +133,6 @@ class CommandBar extends Component {
     e.stopPropagation();
 
     this.props[action]();
-    const node = findDOMNode(this);
-    if (node instanceof HTMLElement) {
-      handlePressAnimation(node.querySelector(`.${action}`));
-    }
   }
 
   renderStepButtons() {
@@ -234,29 +235,19 @@ class CommandBar extends Component {
   }
 
   render() {
-    return dom.div(
-      { className: "command-bar" },
-      this.renderPauseButton(),
-      this.renderStepButtons(),
-      this.renderPauseOnExceptions()
+    return (
+      <div
+        className={classnames("command-bar", {
+          vertical: !this.props.horizontal
+        })}
+      >
+        {this.renderPauseButton()}
+        {this.renderStepButtons()}
+        {this.renderPauseOnExceptions()}
+      </div>
     );
   }
 }
-
-CommandBar.propTypes = {
-  sources: PropTypes.object,
-  selectedSource: PropTypes.object,
-  resume: PropTypes.func,
-  stepIn: PropTypes.func,
-  stepOut: PropTypes.func,
-  stepOver: PropTypes.func,
-  breakOnNext: PropTypes.func,
-  pause: ImPropTypes.map,
-  pauseOnExceptions: PropTypes.func,
-  shouldPauseOnExceptions: PropTypes.bool,
-  shouldIgnoreCaughtExceptions: PropTypes.bool,
-  isWaitingOnBreak: PropTypes.bool
-};
 
 CommandBar.contextTypes = {
   shortcuts: PropTypes.object

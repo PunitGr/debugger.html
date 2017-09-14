@@ -1,8 +1,11 @@
 // @flow
-import { DOM as dom, PropTypes, Component } from "react";
+import React, { Component } from "react";
 import "./Dropdown.css";
 
 class Dropdown extends Component {
+  props: {
+    panel: Object
+  };
   state: {
     dropdownShown: boolean
   };
@@ -30,47 +33,45 @@ class Dropdown extends Component {
   }
 
   renderPanel() {
-    return dom.div(
-      {
-        className: "dropdown",
-        onClick: this.toggleDropdown,
-        style: { display: this.state.dropdownShown ? "block" : "none" }
-      },
-      this.props.panel
+    return (
+      <div
+        className="dropdown"
+        onClick={this.toggleDropdown}
+        style={{ display: this.state.dropdownShown ? "block" : "none" }}
+      >
+        {this.props.panel}
+      </div>
     );
   }
 
   renderButton() {
-    return dom.button(
-      {
-        className: "dropdown-button",
-        onClick: this.toggleDropdown
-      },
-      "»"
+    return (
+      <button className="dropdown-button" onClick={this.toggleDropdown}>
+        »
+      </button>
     );
   }
 
   renderMask() {
-    return dom.div({
-      className: "dropdown-mask",
-      onClick: this.toggleDropdown,
-      style: { display: this.state.dropdownShown ? "block" : "none" }
-    });
+    return (
+      <div
+        className="dropdown-mask"
+        onClick={this.toggleDropdown}
+        style={{ display: this.state.dropdownShown ? "block" : "none" }}
+      />
+    );
   }
 
   render() {
-    return dom.div(
-      { className: "dropdown-block" },
-      this.renderPanel(),
-      this.renderButton(),
-      this.renderMask()
+    return (
+      <div className="dropdown-block">
+        {this.renderPanel()}
+        {this.renderButton()}
+        {this.renderMask()}
+      </div>
     );
   }
 }
-
-Dropdown.propTypes = {
-  panel: PropTypes.object
-};
 
 Dropdown.displayName = "Dropdown";
 

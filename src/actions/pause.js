@@ -1,16 +1,26 @@
 // @flow
-import constants from "../constants";
+
 import { selectSource } from "./sources";
 import { PROMISE } from "../utils/redux/middleware/promise";
 
-import { getPause, getLoadedObject } from "../selectors";
-import { updateFrameLocations } from "../utils/pause";
+import {
+  getPause,
+  getLoadedObject,
+  isStepping,
+  getSelectedSource
+} from "../selectors";
+import { updateFrameLocations, getPausedPosition } from "../utils/pause";
 import { evaluateExpressions } from "./expressions";
+
+import { addHiddenBreakpoint, removeBreakpoint } from "./breakpoints";
+import { getHiddenBreakpointLocation } from "../reducers/breakpoints";
+import * as parser from "../utils/parser";
+import { features } from "../utils/prefs";
 
 import type { Pause, Frame } from "../types";
 import type { ThunkArgs } from "./types";
 
-type CommandType = { type: string };
+type CommandType = string;
 
 /**
  * Redux actions for the pause state
@@ -24,13 +34,30 @@ type CommandType = { type: string };
  * @static
  */
 export function resumed() {
-  return ({ dispatch, client }: ThunkArgs) => {
-    // dispatch(evaluateExpressions(null));
-
-    return dispatch({
-      type: constants.RESUME,
+  return ({ dispatch, client, getState }: ThunkArgs) => {
+    dispatch({
+      type: "RESUME",
       value: undefined
     });
+
+    if (!isStepping(getState())) {
+      dispatch(evaluateExpressions(null));
+    }
+  };
+}
+
+export function continueToHere(line: number) {
+  return async function({ dispatch, getState, client, sourceMaps }: ThunkArgs) {
+    const source = getSelectedSource(getState()).toJS();
+
+    await dispatch(
+      addHiddenBreakpoint({
+        line,
+        column: undefined,
+        sourceId: source.id
+      })
+    );
+    dispatch(command("resume"));
   };
 }
 
@@ -44,16 +71,25 @@ export function resumed() {
 export function paused(pauseInfo: Pause) {
   return async function({ dispatch, getState, client, sourceMaps }: ThunkArgs) {
     let { frames, why, loadedObjects } = pauseInfo;
+
     frames = await updateFrameLocations(frames, sourceMaps);
     const frame = frames[0];
 
+    const scopes = await client.getFrameScopes(frame);
+
     dispatch({
-      type: constants.PAUSED,
-      pauseInfo: { why, frame },
+      type: "PAUSED",
+      pauseInfo: { why, frame, frames },
       frames: frames,
+      scopes,
       selectedFrameId: frame.id,
       loadedObjects: loadedObjects || []
     });
+
+    const hiddenBreakpointLocation = getHiddenBreakpointLocation(getState());
+    if (hiddenBreakpointLocation) {
+      dispatch(removeBreakpoint(hiddenBreakpointLocation));
+    }
 
     dispatch(evaluateExpressions(frame.id));
 
@@ -74,7 +110,7 @@ export function pauseOnExceptions(
 ) {
   return ({ dispatch, client }: ThunkArgs) => {
     dispatch({
-      type: constants.PAUSE_ON_EXCEPTIONS,
+      type: "PAUSE_ON_EXCEPTIONS",
       shouldPauseOnExceptions,
       shouldIgnoreCaughtExceptions,
       [PROMISE]: client.pauseOnExceptions(
@@ -92,15 +128,14 @@ export function pauseOnExceptions(
  * @memberof actions/pause
  * @static
  */
-export function command({ type }: CommandType) {
-  return ({ dispatch, client }: ThunkArgs) => {
+export function command(type: CommandType) {
+  return async ({ dispatch, client }: ThunkArgs) => {
     // execute debugger thread command e.g. stepIn, stepOver
-    client[type]();
+    dispatch({ type: "COMMAND", value: { type } });
 
-    return dispatch({
-      type: constants.COMMAND,
-      value: undefined
-    });
+    await client[type]();
+
+    dispatch({ type: "CLEAR_COMMAND" });
   };
 }
 
@@ -113,7 +148,7 @@ export function command({ type }: CommandType) {
 export function stepIn() {
   return ({ dispatch, getState }: ThunkArgs) => {
     if (getPause(getState())) {
-      return dispatch(command({ type: "stepIn" }));
+      return dispatch(command("stepIn"));
     }
   };
 }
@@ -127,7 +162,7 @@ export function stepIn() {
 export function stepOver() {
   return ({ dispatch, getState }: ThunkArgs) => {
     if (getPause(getState())) {
-      return dispatch(command({ type: "stepOver" }));
+      return dispatch(astCommand("stepOver"));
     }
   };
 }
@@ -141,7 +176,7 @@ export function stepOver() {
 export function stepOut() {
   return ({ dispatch, getState }: ThunkArgs) => {
     if (getPause(getState())) {
-      return dispatch(command({ type: "stepOut" }));
+      return dispatch(command("stepOut"));
     }
   };
 }
@@ -155,7 +190,7 @@ export function stepOut() {
 export function resume() {
   return ({ dispatch, getState }: ThunkArgs) => {
     if (getPause(getState())) {
-      return dispatch(command({ type: "resume" }));
+      return dispatch(command("resume"));
     }
   };
 }
@@ -173,7 +208,7 @@ export function breakOnNext() {
     client.breakOnNext();
 
     return dispatch({
-      type: constants.BREAK_ON_NEXT,
+      type: "BREAK_ON_NEXT",
       value: true
     });
   };
@@ -184,14 +219,18 @@ export function breakOnNext() {
  * @static
  */
 export function selectFrame(frame: Frame) {
-  return ({ dispatch }: ThunkArgs) => {
+  return async ({ dispatch, client }: ThunkArgs) => {
     dispatch(evaluateExpressions(frame.id));
     dispatch(
       selectSource(frame.location.sourceId, { line: frame.location.line })
     );
+
+    const scopes = await client.getFrameScopes(frame);
+
     dispatch({
-      type: constants.SELECT_FRAME,
-      frame
+      type: "SELECT_FRAME",
+      frame,
+      scopes
     });
   };
 }
@@ -209,9 +248,38 @@ export function loadObjectProperties(object: any) {
     }
 
     dispatch({
-      type: constants.LOAD_OBJECT_PROPERTIES,
+      type: "LOAD_OBJECT_PROPERTIES",
       objectId,
       [PROMISE]: client.getProperties(object)
     });
+  };
+}
+
+/**
+ * @memberOf actions/pause
+ * @static
+ * @param stepType
+ * @returns {function(ThunkArgs)}
+ */
+export function astCommand(stepType: string) {
+  return async ({ dispatch, getState, sourceMaps }: ThunkArgs) => {
+    if (!features.asyncStepping) {
+      return dispatch(command(stepType));
+    }
+
+    const pauseInfo = getPause(getState());
+    const source = getSelectedSource(getState()).toJS();
+
+    const pausedPosition = await getPausedPosition(pauseInfo, sourceMaps);
+
+    if (stepType == "stepOver") {
+      const nextLocation = await parser.getNextStep(source, pausedPosition);
+      if (nextLocation) {
+        await dispatch(addHiddenBreakpoint(nextLocation));
+        return dispatch(command("resume"));
+      }
+    }
+
+    return dispatch(command(stepType));
   };
 }

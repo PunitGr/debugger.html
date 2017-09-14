@@ -3,13 +3,13 @@
 import type {
   BreakpointId,
   BreakpointResult,
+  Frame,
   FrameId,
-  ActorId,
   Location,
   Script,
   Source,
   SourceId
-} from "../types";
+} from "debugger-html";
 
 import type {
   TabTarget,
@@ -17,28 +17,34 @@ import type {
   Grip,
   ThreadClient,
   ObjectClient,
-  BreakpointClient,
-  BreakpointResponse
+  BPClients
 } from "./types";
 
-const { createSource } = require("./create");
+import { makeLocationId } from "../../utils/breakpoint";
 
-let bpClients: { [id: ActorId]: BreakpointClient };
+import { createSource, createBreakpointLocation } from "./create";
+
+let bpClients: BPClients;
 let threadClient: ThreadClient;
 let tabTarget: TabTarget;
-let debuggerClient: DebuggerClient | null;
+let debuggerClient: DebuggerClient;
+let supportsWasm: boolean;
 
 type Dependencies = {
   threadClient: ThreadClient,
   tabTarget: TabTarget,
-  debuggerClient: DebuggerClient | null
+  debuggerClient: DebuggerClient,
+  supportsWasm: boolean
 };
 
-function setupCommands(dependencies: Dependencies): void {
+function setupCommands(dependencies: Dependencies): { bpClients: BPClients } {
   threadClient = dependencies.threadClient;
   tabTarget = dependencies.tabTarget;
   debuggerClient = dependencies.debuggerClient;
+  supportsWasm = dependencies.supportsWasm;
   bpClients = {};
+
+  return { bpClients };
 }
 
 function resume(): Promise<*> {
@@ -74,6 +80,26 @@ function sourceContents(sourceId: SourceId): Source {
   return sourceClient.source();
 }
 
+function getBreakpointByLocation(location: Location) {
+  const id = makeLocationId(location);
+  const bpClient = bpClients[id];
+
+  if (bpClient) {
+    const { actor, url, line, column, condition } = bpClient.location;
+    return {
+      id: bpClient.actor,
+      condition,
+      actualLocation: {
+        line,
+        column,
+        sourceId: actor,
+        sourceUrl: url
+      }
+    };
+  }
+  return null;
+}
+
 function setBreakpoint(
   location: Location,
   condition: boolean,
@@ -88,38 +114,31 @@ function setBreakpoint(
       condition,
       noSliding
     })
-    .then((res: BreakpointResponse) => onNewBreakpoint(location, res));
+    .then(([{ actualLocation }, bpClient]) => {
+      actualLocation = createBreakpointLocation(location, actualLocation);
+      const id = makeLocationId(actualLocation);
+      bpClients[id] = bpClient;
+      bpClient.location.line = actualLocation.line;
+      bpClient.location.column = actualLocation.column;
+      bpClient.location.url = actualLocation.sourceUrl || "";
+
+      return { id, actualLocation };
+    });
 }
 
-function onNewBreakpoint(
-  location: Location,
-  res: BreakpointResponse
-): BreakpointResult {
-  const bpClient = res[1];
-  let actualLocation = res[0].actualLocation;
-  bpClients[bpClient.actor] = bpClient;
-
-  // Firefox only returns `actualLocation` if it actually changed,
-  // but we want it always to exist. Format `actualLocation` if it
-  // exists, otherwise use `location`.
-  actualLocation = actualLocation
-    ? {
-        sourceId: actualLocation.source.actor,
-        line: actualLocation.line,
-        column: actualLocation.column
-      }
-    : location;
-
-  return {
-    id: bpClient.actor,
-    actualLocation
-  };
-}
-
-function removeBreakpoint(breakpointId: BreakpointId) {
-  const bpClient = bpClients[breakpointId];
-  delete bpClients[breakpointId];
-  return bpClient.remove();
+function removeBreakpoint(generatedLocation: Location) {
+  try {
+    const id = makeLocationId(generatedLocation);
+    const bpClient = bpClients[id];
+    if (!bpClient) {
+      console.warn("No breakpoint to delete on server");
+      return;
+    }
+    delete bpClients[id];
+    return bpClient.remove();
+  } catch (_error) {
+    console.warn("No breakpoint to delete on server");
+  }
 }
 
 function setBreakpointCondition(
@@ -128,12 +147,15 @@ function setBreakpointCondition(
   condition: boolean,
   noSliding: boolean
 ) {
-  let bpClient = bpClients[breakpointId];
+  const bpClient = bpClients[breakpointId];
   delete bpClients[breakpointId];
 
   return bpClient
     .setCondition(threadClient, condition, noSliding)
-    .then(_bpClient => onNewBreakpoint(location, [{}, _bpClient]));
+    .then(_bpClient => {
+      bpClients[breakpointId] = _bpClient;
+      return { id: breakpointId };
+    });
 }
 
 type EvaluateParam = {
@@ -142,6 +164,10 @@ type EvaluateParam = {
 
 function evaluate(script: Script, { frameId }: EvaluateParam) {
   const params = frameId ? { frameActor: frameId } : {};
+  if (!tabTarget || !tabTarget.activeConsole) {
+    return Promise.resolve();
+  }
+
   return new Promise(resolve => {
     tabTarget.activeConsole.evaluateJS(
       script,
@@ -179,17 +205,20 @@ function getProperties(grip: Grip): Promise<*> {
 
   return objClient.getPrototypeAndProperties().then(resp => {
     const { ownProperties, safeGetterValues } = resp;
-    for (let name in safeGetterValues) {
-      if (name in ownProperties) {
-        let { getterValue } = safeGetterValues[name];
-        ownProperties[name].value = getterValue;
-      } else {
-        ownProperties[name] = safeGetterValues[name];
-      }
+    for (const name in safeGetterValues) {
+      const { enumerable, writable, getterValue } = safeGetterValues[name];
+      ownProperties[name] = { enumerable, writable, value: getterValue };
     }
-
     return resp;
   });
+}
+
+async function getFrameScopes(frame: Frame): Promise<*> {
+  if (frame.scope) {
+    return frame.scope;
+  }
+
+  return threadClient.getEnvironment(frame.id);
 }
 
 function pauseOnExceptions(
@@ -237,7 +266,7 @@ function pauseGrip(func: Function): ObjectClient {
 
 async function fetchSources() {
   const { sources } = await threadClient.getSources();
-  return sources.map(createSource);
+  return sources.map(source => createSource(source, { supportsWasm }));
 }
 
 const clientCommands = {
@@ -251,6 +280,7 @@ const clientCommands = {
   stepOver,
   breakOnNext,
   sourceContents,
+  getBreakpointByLocation,
   setBreakpoint,
   removeBreakpoint,
   setBreakpointCondition,
@@ -259,13 +289,11 @@ const clientCommands = {
   navigate,
   reload,
   getProperties,
+  getFrameScopes,
   pauseOnExceptions,
   prettyPrint,
   disablePrettyPrint,
   fetchSources
 };
 
-module.exports = {
-  setupCommands,
-  clientCommands
-};
+export { setupCommands, clientCommands };

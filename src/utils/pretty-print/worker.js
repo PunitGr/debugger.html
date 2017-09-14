@@ -1,7 +1,9 @@
 // @flow
 
-const prettyFast = require("pretty-fast");
-const assert = require("../assert");
+import prettyFast from "pretty-fast";
+
+import { workerUtils } from "devtools-utils";
+const { workerHandler } = workerUtils;
 
 type Mappings = {
   _array: Mapping[]
@@ -24,24 +26,20 @@ type InvertedMapping = {
 };
 
 function prettyPrint({ url, indent, source }) {
-  try {
-    const prettified = prettyFast(source, {
-      url: url,
-      indent: " ".repeat(indent)
-    });
+  const prettified = prettyFast(source, {
+    url: url,
+    indent: " ".repeat(indent)
+  });
 
-    return {
-      code: prettified.code,
-      mappings: prettified.map._mappings
-    };
-  } catch (e) {
-    throw new Error(`${e.message}\n${e.stack}`);
-  }
+  return {
+    code: prettified.code,
+    mappings: invertMappings(prettified.map._mappings)
+  };
 }
 
 function invertMappings(mappings: Mappings) {
   return mappings._array.map((m: Mapping) => {
-    let mapping: InvertedMapping = {
+    const mapping: InvertedMapping = {
       generated: {
         line: m.originalLine,
         column: m.originalColumn
@@ -59,20 +57,4 @@ function invertMappings(mappings: Mappings) {
   });
 }
 
-self.onmessage = function(msg) {
-  const { id, args } = msg.data;
-  assert(msg.data.method === "prettyPrint", "Method must be `prettyPrint`");
-
-  try {
-    let { code, mappings } = prettyPrint(args[0]);
-    self.postMessage({
-      id,
-      response: {
-        code,
-        mappings: invertMappings(mappings)
-      }
-    });
-  } catch (e) {
-    self.postMessage({ id, error: e });
-  }
-};
+self.onmessage = workerHandler({ prettyPrint });

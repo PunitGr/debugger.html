@@ -1,16 +1,20 @@
-const { isEnabled } = require("devtools-config");
-const { isPretty, isJavaScript } = require("../source");
-const { isOriginalId } = require("devtools-source-map");
-const buildQuery = require("./build-query");
-const sourceDocumentUtils = require("./source-documents");
-const { getDocument } = sourceDocumentUtils;
+// @flow
+
+import { isEnabled } from "devtools-config";
+import * as sourceDocumentUtils from "./source-documents";
+import { shouldPrettyPrint } from "../../utils/source";
 
 import * as expressionUtils from "./expression.js";
 
-const sourceSearchUtils = require("./source-search");
+import * as sourceSearchUtils from "./source-search";
 const { findNext, findPrev } = sourceSearchUtils;
 
-const { SourceEditor, SourceEditorUtils } = require("devtools-source-editor");
+import { isWasm, lineToWasmOffset, wasmOffsetToLine } from "../wasm";
+
+import { SourceEditor, SourceEditorUtils } from "devtools-source-editor";
+
+import type { AstPosition, AstLocation } from "../parser/types";
+import type { EditorPosition, EditorRange } from "../editor/types";
 
 function shouldShowPrettyPrint(selectedSource) {
   if (!selectedSource) {
@@ -18,16 +22,7 @@ function shouldShowPrettyPrint(selectedSource) {
   }
 
   selectedSource = selectedSource.toJS();
-  const _isPretty = isPretty(selectedSource);
-  const _isJavaScript = isJavaScript(selectedSource.url);
-  const isOriginal = isOriginalId(selectedSource.id);
-  const hasSourceMap = selectedSource.sourceMapURL;
-
-  if (_isPretty || isOriginal || hasSourceMap || !_isJavaScript) {
-    return false;
-  }
-
-  return true;
+  return shouldPrettyPrint(selectedSource);
 }
 
 function shouldShowFooter(selectedSource, horizontal) {
@@ -36,16 +31,6 @@ function shouldShowFooter(selectedSource, horizontal) {
   }
 
   return shouldShowPrettyPrint(selectedSource);
-}
-
-function isTextForSource(sourceText) {
-  return !sourceText.get("loading") && !sourceText.get("error");
-}
-
-function breakpointAtLine(breakpoints, line) {
-  return breakpoints.find(b => {
-    return b.location.line === line + 1;
-  });
 }
 
 function traverseResults(e, ctx, query, dir, modifiers) {
@@ -69,9 +54,11 @@ function createEditor() {
   return new SourceEditor({
     mode: "javascript",
     foldGutter: isEnabled("codeFolding"),
+    enableCodeFolding: isEnabled("codeFolding"),
     readOnly: true,
     lineNumbers: true,
     theme: "mozilla",
+    styleActiveLine: false,
     lineWrapping: false,
     matchBrackets: true,
     showAnnotationRuler: true,
@@ -86,14 +73,57 @@ function createEditor() {
   });
 }
 
-function updateDocument(editor, selectedSource, sourceText) {
-  if (selectedSource) {
-    let sourceId = selectedSource.get("id");
-    const doc = getDocument(sourceId) || editor.createDocument();
-    editor.replaceDocument(doc);
-  } else if (sourceText) {
-    this.setText(sourceText.get("text"));
-  }
+function toEditorLine(sourceId: string, lineOrOffset: number): ?number {
+  return isWasm(sourceId)
+    ? wasmOffsetToLine(sourceId, lineOrOffset)
+    : lineOrOffset - 1;
+}
+
+function toEditorPosition(
+  sourceId: string,
+  location: AstPosition
+): EditorPosition {
+  return {
+    line: toEditorLine(sourceId, location.line),
+    column: isWasm(sourceId) ? 0 : location.column
+  };
+}
+
+function toEditorRange(sourceId: string, location: AstLocation): EditorRange {
+  const { start, end } = location;
+  return {
+    start: toEditorPosition(sourceId, start),
+    end: toEditorPosition(sourceId, end)
+  };
+}
+
+function toSourceLine(sourceId: string, line: number): ?number {
+  return isWasm(sourceId) ? lineToWasmOffset(sourceId, line) : line + 1;
+}
+
+function toSourceLocation(
+  sourceId: string,
+  location: EditorPosition
+): AstPosition {
+  return {
+    line: toSourceLine(sourceId, location.line),
+    column: isWasm(sourceId) ? undefined : location.column
+  };
+}
+
+function markText(editor: any, className, location: EditorRange) {
+  const { start, end } = location;
+
+  return editor.codeMirror.markText(
+    { ch: start.column, line: start.line },
+    { ch: end.column, line: end.line },
+    { className }
+  );
+}
+
+function lineAtHeight(editor, sourceId, event) {
+  const editorLine = editor.codeMirror.lineAtHeight(event.clientY);
+  return toSourceLine(sourceId, editorLine);
 }
 
 module.exports = Object.assign(
@@ -104,12 +134,16 @@ module.exports = Object.assign(
   SourceEditorUtils,
   {
     createEditor,
+    isWasm,
+    toEditorLine,
+    toEditorPosition,
+    toEditorRange,
+    toSourceLine,
+    toSourceLocation,
     shouldShowPrettyPrint,
     shouldShowFooter,
-    buildQuery,
-    isTextForSource,
-    breakpointAtLine,
     traverseResults,
-    updateDocument
+    markText,
+    lineAtHeight
   }
 );

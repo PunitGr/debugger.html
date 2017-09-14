@@ -1,23 +1,18 @@
 // @flow
-import React from "react";
+import React, { PureComponent } from "react";
 import { connect } from "react-redux";
 import { bindActionCreators } from "redux";
-import ImPropTypes from "react-immutable-proptypes";
 import actions from "../../actions";
-import {
-  getVisibleExpressions,
-  getLoadedObjects,
-  getPause
-} from "../../selectors";
-const CloseButton = React.createFactory(
-  require("../shared/Button/Close").default
-);
-const ObjectInspector = React.createFactory(
-  require("../shared/ObjectInspector").default
-);
-const { DOM: dom, PropTypes } = React;
+import { getExpressions, getLoadedObjects, getPause } from "../../selectors";
+
+import CloseButton from "../shared/Button/Close";
+import { ObjectInspector } from "devtools-reps";
 
 import "./Expressions.css";
+
+import type { List } from "immutable";
+import type { Expression } from "../../types";
+
 function getValue(expression) {
   const value = expression.value;
   if (!value) {
@@ -29,8 +24,15 @@ function getValue(expression) {
 
   if (value.exception) {
     return {
-      path: expression.from,
+      path: value.from,
       value: value.exception
+    };
+  }
+
+  if (value.error) {
+    return {
+      path: value.from,
+      value: value.error
     };
   }
 
@@ -47,7 +49,7 @@ function getValue(expression) {
   };
 }
 
-class Expressions extends React.Component {
+class Expressions extends PureComponent {
   _input: null | any;
 
   state: {
@@ -55,6 +57,16 @@ class Expressions extends React.Component {
   };
 
   renderExpression: Function;
+
+  props: {
+    expressions: List<Expression>,
+    addExpression: (string, ?Object) => void,
+    evaluateExpressions: () => void,
+    updateExpression: (string, Expression) => void,
+    deleteExpression: Expression => void,
+    loadObjectProperties: () => void,
+    loadedObjects: Map<string, any>
+  };
 
   constructor(...args) {
     super(...args);
@@ -113,20 +125,17 @@ class Expressions extends React.Component {
   }
 
   renderExpressionEditInput(expression) {
-    return dom.span(
-      { className: "expression-input-container" },
-      dom.input({
-        type: "text",
-        className: "input-expression",
-        onKeyPress: e => this.inputKeyPress(e, expression),
-        onBlur: () => {
-          this.setState({ editing: null });
-        },
-        defaultValue: expression.input,
-        ref: c => {
-          this._input = c;
-        }
-      })
+    return (
+      <span className="expression-input-container" key={expression.input}>
+        <input
+          className="input-expression"
+          type="text"
+          onKeyPress={e => this.inputKeyPress(e, expression)}
+          onBlur={() => this.setState({ editing: null })}
+          defaultValue={expression.input}
+          ref={c => (this._input = c)}
+        />
+      </span>
     );
   }
 
@@ -143,7 +152,11 @@ class Expressions extends React.Component {
       return;
     }
 
-    const { value, path } = getValue(expression);
+    let { value, path } = getValue(expression);
+
+    if (value.class == "Error") {
+      value = { unavailable: true };
+    }
 
     const root = {
       name: expression.input,
@@ -151,21 +164,29 @@ class Expressions extends React.Component {
       contents: { value }
     };
 
-    return dom.div(
-      {
-        className: "expression-container",
-        key: path || input
-      },
-      ObjectInspector({
-        roots: [root],
-        getObjectProperties: id => loadedObjects.get(id),
-        autoExpandDepth: 0,
-        onDoubleClick: (item, options) =>
-          this.editExpression(expression, options),
-        loadObjectProperties,
-        getActors: () => ({})
-      }),
-      CloseButton({ handleClick: e => this.deleteExpression(e, expression) })
+    return (
+      <li className="expression-container" key={`${path}/${input}`}>
+        <div className="expression-content">
+          <ObjectInspector
+            roots={[root]}
+            autoExpandDepth={0}
+            disableWrap={true}
+            disabledFocus={true}
+            onDoubleClick={(items, options) =>
+              this.editExpression(expression, options)}
+            getObjectProperties={id => loadedObjects[id]}
+            loadObjectProperties={loadObjectProperties}
+            // TODO: See https://github.com/devtools-html/debugger.html/issues/3555.
+            getObjectEntries={actor => {}}
+            loadObjectEntries={grip => {}}
+          />
+          <div className="expression-container__close-btn">
+            <CloseButton
+              handleClick={e => this.deleteExpression(e, expression)}
+            />
+          </div>
+        </div>
+      </li>
     );
   }
 
@@ -190,46 +211,37 @@ class Expressions extends React.Component {
       e.target.value = "";
       this.props.addExpression(value);
     };
-    return dom.span(
-      { className: "expression-input-container" },
-      dom.input({
-        type: "text",
-        className: "input-expression",
-        placeholder: L10N.getStr("expressions.placeholder"),
-        onBlur: e => {
-          e.target.value = "";
-        },
-        onKeyPress
-      })
+
+    return (
+      <li className="expression-input-container">
+        <input
+          className="input-expression"
+          type="text"
+          placeholder={L10N.getStr("expressions.placeholder")}
+          onBlur={e => (e.target.value = "")}
+          onKeyPress={onKeyPress}
+        />
+      </li>
     );
   }
 
   render() {
     const { expressions } = this.props;
-    return dom.span(
-      { className: "pane expressions-list" },
-      expressions.map(this.renderExpression),
-      this.renderNewExpressionInput()
+    return (
+      <ul className="pane expressions-list">
+        {expressions.map(this.renderExpression)}
+        {this.renderNewExpressionInput()}
+      </ul>
     );
   }
 }
-
-Expressions.propTypes = {
-  expressions: ImPropTypes.list.isRequired,
-  addExpression: PropTypes.func.isRequired,
-  evaluateExpressions: PropTypes.func.isRequired,
-  updateExpression: PropTypes.func.isRequired,
-  deleteExpression: PropTypes.func.isRequired,
-  loadObjectProperties: PropTypes.func,
-  loadedObjects: ImPropTypes.map.isRequired
-};
 
 Expressions.displayName = "Expressions";
 
 export default connect(
   state => ({
     pauseInfo: getPause(state),
-    expressions: getVisibleExpressions(state),
+    expressions: getExpressions(state),
     loadedObjects: getLoadedObjects(state)
   }),
   dispatch => bindActionCreators(actions, dispatch)

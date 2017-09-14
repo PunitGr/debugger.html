@@ -1,7 +1,7 @@
 // @flow
 // This module converts Firefox specific types to the generic types
 
-import type { Frame, Source } from "../types";
+import type { Frame, Source, Location } from "debugger-html";
 import type {
   PausedPacket,
   FramesResponse,
@@ -9,10 +9,10 @@ import type {
   SourcePayload
 } from "./types";
 
-function createFrame(frame: FramePacket): Frame {
+export function createFrame(frame: FramePacket): Frame {
   let title;
   if (frame.type == "call") {
-    let c = frame.callee;
+    const c = frame.callee;
     title = c.name || c.userDisplayName || c.displayName || "(anonymous)";
   } else {
     title = `(${frame.type})`;
@@ -31,17 +31,25 @@ function createFrame(frame: FramePacket): Frame {
   };
 }
 
-function createSource(source: SourcePayload): Source {
+export function createSource(
+  source: SourcePayload,
+  { supportsWasm }: { supportsWasm: boolean }
+): Source {
   return {
     id: source.actor,
     url: source.url,
     isPrettyPrinted: false,
+    isWasm: supportsWasm && source.introductionType === "wasm",
     sourceMapURL: source.sourceMapURL,
-    isBlackBoxed: false
+    isBlackBoxed: false,
+    loadedState: "unloaded"
   };
 }
 
-function createPause(packet: PausedPacket, response: FramesResponse): any {
+export function createPause(
+  packet: PausedPacket,
+  response: FramesResponse
+): any {
   // NOTE: useful when the debugger is already paused
   const frame = packet.frame || response.frames[0];
 
@@ -51,8 +59,22 @@ function createPause(packet: PausedPacket, response: FramesResponse): any {
   });
 }
 
-module.exports = {
-  createFrame,
-  createSource,
-  createPause
-};
+// Firefox only returns `actualLocation` if it actually changed,
+// but we want it always to exist. Format `actualLocation` if it
+// exists, otherwise use `location`.
+
+export function createBreakpointLocation(
+  location: Location,
+  actualLocation?: Object
+): Location {
+  if (!actualLocation) {
+    return location;
+  }
+
+  return {
+    sourceId: actualLocation.source.actor,
+    sourceUrl: actualLocation.source.url,
+    line: actualLocation.line,
+    column: actualLocation.column
+  };
+}

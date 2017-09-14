@@ -1,8 +1,9 @@
 // @flow
 
-import constants from "../constants";
 import makeRecord from "../utils/makeRecord";
 import { List } from "immutable";
+import { omit } from "lodash";
+import { createSelector } from "reselect";
 import { prefs } from "../utils/prefs";
 
 import type { Expression } from "../types";
@@ -19,37 +20,34 @@ export const State = makeRecord(
   }: ExpressionState)
 );
 
-export function update(
+function update(
   state: Record<ExpressionState> = State(),
   action: Action
 ): Record<ExpressionState> {
   switch (action.type) {
-    case constants.ADD_EXPRESSION:
+    case "ADD_EXPRESSION":
       return appendToList(state, ["expressions"], {
         input: action.input,
         value: null,
-        updating: true,
-        visible: action.visible
+        updating: true
       });
-    case constants.UPDATE_EXPRESSION:
+    case "UPDATE_EXPRESSION":
       const key = action.expression.input;
       return updateItemInList(state, ["expressions"], key, {
         input: action.input,
         value: null,
-        updating: true,
-        visible: action.visible
+        updating: true
       });
-    case constants.EVALUATE_EXPRESSION:
+    case "EVALUATE_EXPRESSION":
       if (action.status === "done") {
         return updateItemInList(state, ["expressions"], action.input, {
           input: action.input,
           value: action.value,
-          updating: false,
-          visible: action.visible
+          updating: false
         });
       }
       break;
-    case constants.DELETE_EXPRESSION:
+    case "DELETE_EXPRESSION":
       return deleteExpression(state, action.input);
   }
 
@@ -65,10 +63,12 @@ function restoreExpressions() {
 }
 
 function storeExpressions(state) {
-  prefs.expressions = state
+  const expressions = state
     .getIn(["expressions"])
-    .filter(e => e.visible)
+    .map(expression => omit(expression, "value"))
     .toJS();
+
+  prefs.expressions = expressions;
 }
 
 function appendToList(state: State, path: string[], value: any) {
@@ -105,14 +105,15 @@ function deleteExpression(state: State, input: string) {
 
 type OuterState = { expressions: Record<ExpressionState> };
 
-export function getExpressions(state: OuterState) {
-  return state.expressions.get("expressions");
-}
+const getExpressionsWrapper = state => state.expressions;
 
-export function getVisibleExpressions(state: OuterState) {
-  return state.expressions.get("expressions").filter(e => e.visible);
-}
+export const getExpressions = createSelector(
+  getExpressionsWrapper,
+  expressions => expressions.get("expressions")
+);
 
 export function getExpression(state: OuterState, input: string) {
   return getExpressions(state).find(exp => exp.input == input);
 }
+
+export default update;

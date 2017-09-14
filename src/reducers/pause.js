@@ -3,122 +3,151 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const constants = require("../constants");
-const fromJS = require("../utils/fromJS");
-const makeRecord = require("../utils/makeRecord");
-const { prefs } = require("../utils/prefs");
-const I = require("immutable");
+import { createSelector } from "reselect";
+import { prefs } from "../utils/prefs";
 
-import type { Frame, Pause } from "../types";
 import type { Action } from "../actions/types";
-import type { Record } from "../utils/makeRecord";
 
 type PauseState = {
-  pause: ?Pause,
+  pause: ?any,
   isWaitingOnBreak: boolean,
-  frames: ?(Frame[]),
+  frames: ?(any[]),
+  frameScopes: any,
   selectedFrameId: ?string,
   loadedObjects: Object,
   shouldPauseOnExceptions: boolean,
   shouldIgnoreCaughtExceptions: boolean,
-  debuggeeUrl: string
+  debuggeeUrl: string,
+  command: string
 };
 
-const State = makeRecord(
-  ({
-    pause: undefined,
-    isWaitingOnBreak: false,
-    frames: undefined,
-    selectedFrameId: undefined,
-    loadedObjects: I.Map(),
-    shouldPauseOnExceptions: prefs.pauseOnExceptions,
-    shouldIgnoreCaughtExceptions: prefs.ignoreCaughtExceptions,
-    debuggeeUrl: ""
-  }: PauseState)
-);
+export const State = (): PauseState => ({
+  pause: undefined,
+  isWaitingOnBreak: false,
+  frames: undefined,
+  selectedFrameId: undefined,
+  frameScopes: {},
+  loadedObjects: {},
+  shouldPauseOnExceptions: prefs.pauseOnExceptions,
+  shouldIgnoreCaughtExceptions: prefs.ignoreCaughtExceptions,
+  debuggeeUrl: "",
+  command: ""
+});
 
-function update(state = State(), action: Action): Record<PauseState> {
+function update(state: PauseState = State(), action: Action): PauseState {
   switch (action.type) {
-    case constants.PAUSED: {
-      const { selectedFrameId, frames, loadedObjects, pauseInfo } = action;
+    case "PAUSED": {
+      const {
+        selectedFrameId,
+        frames,
+        scopes,
+        loadedObjects,
+        pauseInfo
+      } = action;
       pauseInfo.isInterrupted = pauseInfo.why.type === "interrupted";
 
+      const frameScopes = { [selectedFrameId]: scopes };
+
       // turn this into an object keyed by object id
-      let objectMap = {};
+      const objectMap = {};
       loadedObjects.forEach(obj => {
         objectMap[obj.value.objectId] = obj;
       });
 
-      return state.merge({
+      return Object.assign({}, state, {
         isWaitingOnBreak: false,
-        pause: fromJS(pauseInfo),
+        pause: pauseInfo,
         selectedFrameId,
         frames,
+        frameScopes,
         loadedObjects: objectMap
       });
     }
 
-    case constants.RESUME:
-      return state.merge({
+    case "RESUME":
+      return Object.assign({}, state, {
         pause: null,
         frames: null,
         selectedFrameId: null,
         loadedObjects: {}
       });
 
-    case constants.TOGGLE_PRETTY_PRINT:
+    case "TOGGLE_PRETTY_PRINT":
       if (action.status == "done") {
         const frames = action.value.frames;
-        let pause = state.get("pause");
+        const pause = state.pause;
         if (pause) {
-          pause = pause.set("frame", fromJS(frames[0]));
+          pause.frame = frames[0];
         }
 
-        return state.merge({ pause, frames });
+        return Object.assign({}, state, { pause, frames });
       }
 
       break;
-    case constants.BREAK_ON_NEXT:
-      return state.set("isWaitingOnBreak", true);
+    case "BREAK_ON_NEXT":
+      return Object.assign({}, state, { isWaitingOnBreak: true });
 
-    case constants.SELECT_FRAME:
-      return state.set("selectedFrameId", action.frame.id);
+    case "SELECT_FRAME":
+      const { frame, scopes } = action;
+      const selectedFrameId = frame.id;
+      return {
+        ...state,
+        frameScopes: { ...state.frameScopes, [selectedFrameId]: scopes },
+        selectedFrameId
+      };
 
-    case constants.LOAD_OBJECT_PROPERTIES:
+    case "LOAD_OBJECT_PROPERTIES":
       if (action.status === "start") {
-        return state.setIn(["loadedObjects", action.objectId], {});
+        return {
+          ...state,
+          loadedObjects: {
+            ...state.loadedObjects,
+            [action.objectId]: {}
+          }
+        };
       }
 
       if (action.status === "done") {
         if (!action.value) {
-          return state;
+          return Object.assign({}, state);
         }
 
         const ownProperties = action.value.ownProperties;
         const ownSymbols = action.value.ownSymbols || [];
         const prototype = action.value.prototype;
 
-        return state.setIn(["loadedObjects", action.objectId], {
-          ownProperties,
-          prototype,
-          ownSymbols
-        });
+        return {
+          ...state,
+          loadedObjects: {
+            ...state.loadedObjects,
+            [action.objectId]: { ownProperties, prototype, ownSymbols }
+          }
+        };
       }
       break;
 
-    case constants.NAVIGATE:
-      return State().set("debuggeeUrl", action.url);
+    case "CONNECT":
+      return Object.assign({}, State(), { debuggeeUrl: action.url });
 
-    case constants.PAUSE_ON_EXCEPTIONS:
+    case "PAUSE_ON_EXCEPTIONS":
       const { shouldPauseOnExceptions, shouldIgnoreCaughtExceptions } = action;
 
       prefs.pauseOnExceptions = shouldPauseOnExceptions;
       prefs.ignoreCaughtExceptions = shouldIgnoreCaughtExceptions;
 
-      return state.merge({
+      return Object.assign({}, state, {
         shouldPauseOnExceptions,
         shouldIgnoreCaughtExceptions
       });
+
+    case "COMMAND":
+      return { ...state, command: action.value.type };
+
+    case "CLEAR_COMMAND":
+      return { ...state, command: "" };
+
+    case "NAVIGATE":
+      return { ...state, debuggeeUrl: action.url };
   }
 
   return state;
@@ -133,72 +162,75 @@ function update(state = State(), action: Action): Record<PauseState> {
 // top-level app state, so we'd have to "wrap" them to automatically
 // pick off the piece of state we're interested in. It's impossible
 // (right now) to type those wrapped functions.
-type OuterState = { pause: Record<PauseState> };
+type OuterState = { pause: PauseState };
 
-function getPause(state: OuterState) {
-  return state.pause.get("pause");
+const getPauseState = state => state.pause;
+
+export const getPause = createSelector(
+  getPauseState,
+  pauseWrapper => pauseWrapper.pause
+);
+
+export const getLoadedObjects = createSelector(
+  getPauseState,
+  pauseWrapper => pauseWrapper.loadedObjects
+);
+
+export function isStepping(state: OuterState) {
+  return ["stepIn", "stepOver", "stepOut"].includes(state.pause.command);
 }
 
-function getLoadedObjects(state: OuterState) {
-  return state.pause.get("loadedObjects");
+export function getLoadedObject(state: OuterState, objectId: string) {
+  return getLoadedObjects(state)[objectId];
 }
 
-function getLoadedObject(state: OuterState, objectId: string) {
-  return getLoadedObjects(state).get(objectId);
+export function getObjectProperties(state: OuterState, parentId: string) {
+  return getLoadedObjects(state).filter(obj => obj.parentId == parentId);
 }
 
-function getObjectProperties(state: OuterState, parentId: string) {
-  return getLoadedObjects(state).filter(obj => obj.get("parentId") == parentId);
+export function getIsWaitingOnBreak(state: OuterState) {
+  return state.pause.isWaitingOnBreak;
 }
 
-function getIsWaitingOnBreak(state: OuterState) {
-  return state.pause.get("isWaitingOnBreak");
+export function getShouldPauseOnExceptions(state: OuterState) {
+  return state.pause.shouldPauseOnExceptions;
 }
 
-function getShouldPauseOnExceptions(state: OuterState) {
-  return state.pause.get("shouldPauseOnExceptions");
+export function getShouldIgnoreCaughtExceptions(state: OuterState) {
+  return state.pause.shouldIgnoreCaughtExceptions;
 }
 
-function getShouldIgnoreCaughtExceptions(state: OuterState) {
-  return state.pause.get("shouldIgnoreCaughtExceptions");
+export function getFrames(state: OuterState) {
+  return state.pause.frames;
 }
 
-function getFrames(state: OuterState) {
-  return state.pause.get("frames");
+export function getFrameScopes(state: OuterState, frameId: string) {
+  return state.pause.frameScopes[frameId];
 }
 
-function getSelectedFrame(state: OuterState) {
-  const selectedFrameId = state.pause.get("selectedFrameId");
-  const frames = state.pause.get("frames");
-  if (!frames) {
-    return null;
+const getSelectedFrameId = createSelector(getPauseState, pauseWrapper => {
+  return pauseWrapper.selectedFrameId;
+});
+
+export const getSelectedFrame = createSelector(
+  getSelectedFrameId,
+  getFrames,
+  (selectedFrameId, frames) => {
+    if (!frames) {
+      return null;
+    }
+    return frames.find(frame => frame.id == selectedFrameId);
   }
+);
 
-  return frames.find(frame => frame.get("id") == selectedFrameId).toJS();
-}
-
-function getDebuggeeUrl(state: OuterState) {
-  return state.pause.get("debuggeeUrl");
+export function getDebuggeeUrl(state: OuterState) {
+  return state.pause.debuggeeUrl;
 }
 
 // NOTE: currently only used for chrome
-function getChromeScopes(state: OuterState) {
+export function getChromeScopes(state: OuterState) {
   const frame = getSelectedFrame(state);
   return frame ? frame.scopeChain : undefined;
 }
 
-module.exports = {
-  State,
-  update,
-  getPause,
-  getChromeScopes,
-  getLoadedObjects,
-  getLoadedObject,
-  getObjectProperties,
-  getIsWaitingOnBreak,
-  getShouldPauseOnExceptions,
-  getShouldIgnoreCaughtExceptions,
-  getFrames,
-  getSelectedFrame,
-  getDebuggeeUrl
-};
+export default update;

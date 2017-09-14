@@ -7,9 +7,14 @@ import * as sources from "./sources";
 import * as pause from "./pause";
 import * as navigation from "./navigation";
 import * as ui from "./ui";
+import * as ast from "./ast";
 import * as coverage from "./coverage";
+import * as projectTextSearch from "./project-text-search";
+import * as sourceSearch from "./source-search";
+import * as loadSourceText from "./sources/loadSourceText";
 
 export default Object.assign(
+  {},
   navigation,
   breakpoints,
   expressions,
@@ -17,5 +22,9 @@ export default Object.assign(
   sources,
   pause,
   ui,
-  coverage
+  ast,
+  coverage,
+  projectTextSearch,
+  sourceSearch,
+  loadSourceText
 );

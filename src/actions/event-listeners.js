@@ -9,7 +9,6 @@
  * @module actions/event-listeners
  */
 
-import constants from "../constants";
 import { reportException } from "../utils/DevToolsUtils";
 import { getPause, getSourceByURL } from "../selectors";
 
@@ -62,21 +61,20 @@ export function fetchEventListeners() {
         dispatch({
           type: services.WAIT_UNTIL,
           predicate: action =>
-            action.type === constants.FETCH_EVENT_LISTENERS &&
-            action.status === "done",
+            action.type === "FETCH_EVENT_LISTENERS" && action.status === "done",
           run: dispatch => dispatch(fetchEventListeners())
         });
         return;
       }
 
       dispatch({
-        type: constants.FETCH_EVENT_LISTENERS,
+        type: "FETCH_EVENT_LISTENERS",
         status: "begin"
       });
 
       asPaused(getState(), client, _getEventListeners).then(listeners => {
         dispatch({
-          type: constants.FETCH_EVENT_LISTENERS,
+          type: "FETCH_EVENT_LISTENERS",
           status: "done",
           listeners: formatListeners(getState(), listeners)
         });
@@ -104,9 +102,9 @@ async function _getEventListeners(threadClient) {
   response.listeners.sort((a, b) => (a.type > b.type ? 1 : -1));
 
   // Add all the listeners in the debugger view event linsteners container.
-  let fetchedDefinitions = new Map();
-  let listeners = [];
-  for (let listener of response.listeners) {
+  const fetchedDefinitions = new Map();
+  const listeners = [];
+  for (const listener of response.listeners) {
     let definitionSite;
     if (fetchedDefinitions.has(listener.function.actor)) {
       definitionSite = fetchedDefinitions.get(listener.function.actor);
@@ -159,7 +157,7 @@ export function updateEventBreakpoints(eventNames) {
         window.emit(EVENTS.EVENT_BREAKPOINTS_UPDATED);
 
         dispatch({
-          type: constants.UPDATE_EVENT_BREAKPOINTS,
+          type: "UPDATE_EVENT_BREAKPOINTS",
           eventNames: eventNames
         });
       });

@@ -1,19 +1,21 @@
 // @flow
 
-import { DOM as dom, PropTypes, Component } from "react";
+import React, { Component } from "react";
 import classnames from "classnames";
 import Svg from "../Svg";
 import "./PaneToggle.css";
 
-type NextProps = {
+type Props = {
   collapsed: boolean,
-  handleClick: () => any,
+  handleClick: (string, boolean) => void,
   horizontal?: boolean,
   position: string
 };
 
 class PaneToggleButton extends Component {
-  shouldComponentUpdate(nextProps: NextProps) {
+  props: Props;
+
+  shouldComponentUpdate(nextProps: Props) {
     const { collapsed, horizontal } = this.props;
 
     return (
@@ -27,26 +29,20 @@ class PaneToggleButton extends Component {
       ? L10N.getStr("expandPanes")
       : L10N.getStr("collapsePanes");
 
-    return dom.div(
-      {
-        className: classnames(`toggle-button-${position}`, {
+    return (
+      <div
+        className={classnames(`toggle-button-${position}`, {
           collapsed,
           vertical: horizontal != null ? !horizontal : false
-        }),
-        onClick: () => handleClick(position, collapsed),
-        title
-      },
-      Svg("togglePanes")
+        })}
+        onClick={() => handleClick(position, collapsed)}
+        title={title}
+      >
+        <Svg name="togglePanes" />
+      </div>
     );
   }
 }
-
-PaneToggleButton.propTypes = {
-  position: PropTypes.string.isRequired,
-  collapsed: PropTypes.bool.isRequired,
-  horizontal: PropTypes.bool,
-  handleClick: PropTypes.func.isRequired
-};
 
 PaneToggleButton.displayName = "PaneToggleButton";
 

@@ -1,92 +1,53 @@
 // @flow
 
-import { resolveToken as resolveTokenFromParser } from "../parser";
-import type { Expression, Frame, SourceText } from "../../types";
-import type { Record } from "../makeRecord";
-const get = require("lodash/get");
+import { isEqual } from "lodash";
 
 export function getTokenLocation(codeMirror: any, tokenEl: HTMLElement) {
-  const lineOffset = 1;
-  const { left, top } = tokenEl.getBoundingClientRect();
-  const { line, ch } = codeMirror.coordsChar({ left, top });
+  const { left, top, width, height } = tokenEl.getBoundingClientRect();
+  const { line, ch } = codeMirror.coordsChar({
+    left: left + width / 2,
+    top: top + height / 2
+  });
 
   return {
-    line: line + lineOffset,
+    line: line + 1,
     column: ch
   };
 }
 
-export async function resolveToken(
-  cm: any,
-  token: HTMLElement,
-  sourceText: Record<SourceText>,
-  frame: Frame
+export function updatePreview(
+  target: HTMLElement,
+  editor: any,
+  { linesInScope, preview, setPreview, clearPreview }: any
 ) {
-  const loc = getTokenLocation(cm, token);
-  return await resolveTokenFromParser(
-    sourceText.toJS(),
-    token.textContent || "",
-    loc,
-    frame
-  );
-}
+  const location = getTokenLocation(editor.codeMirror, target);
+  const tokenText = target.innerText ? target.innerText.trim() : "";
+  const cursorPos = target.getBoundingClientRect();
 
-export function getThisFromFrame(selectedFrame: Frame) {
-  if ("this" in selectedFrame) {
-    return { value: selectedFrame.this };
+  if (preview) {
+    // We are mousing over the same token as before
+    if (isEqual(preview.tokenPos, location)) {
+      return;
+    }
+
+    // We are mousing over a new token that is not in the preview
+    if (!target.classList.contains("debug-expression")) {
+      clearPreview();
+    }
   }
 
-  return null;
-}
+  const invalidToken =
+    tokenText === "" || tokenText.match(/[(){}\|&%,.;=<>\+-/\*\s]/);
+  const invalidTarget =
+    (target.parentElement &&
+      !target.parentElement.closest(".CodeMirror-line")) ||
+    cursorPos.top == 0;
+  const isUpdating = preview && preview.updating;
+  const inScope = linesInScope && linesInScope.includes(location.line);
 
-// TODO Better define the value for `variables` map once we do it in
-// debugger-html
-type PreviewExpressionArgs = {
-  expression: Expression,
-  selectedFrame: Frame,
-  tokenText: string,
-  variables: Map<string | null, Object>
-};
-
-export function previewExpression({
-  expression,
-  selectedFrame,
-  variables,
-  tokenText
-}: PreviewExpressionArgs) {
-  if (!tokenText) {
-    return null;
+  if (invalidTarget || !inScope || isUpdating || invalidToken) {
+    return;
   }
 
-  if (tokenText === "this") {
-    return getThisFromFrame(selectedFrame);
-  }
-
-  if (variables.has(tokenText)) {
-    return variables.get(tokenText);
-  }
-
-  return expression || null;
-}
-
-// `getExpressionValue` and `previewExpression` are utility functions
-// for resolving which expression to show in the preview.
-// Get ExpressionValue, knows how to get the appropriate value for each type:
-// variable, expression, raw value.
-export function getExpressionValue(
-  selectedExpression: Expression,
-  { getExpression }: Object
-) {
-  const variableValue = get(selectedExpression, "contents.value");
-  if (variableValue) {
-    return variableValue;
-  }
-
-  const expressionValue = getExpression(selectedExpression.value);
-  if (expressionValue) {
-    return get(expressionValue, "value.result");
-  }
-
-  const rawValue = selectedExpression.value;
-  return rawValue;
+  setPreview(tokenText, location, cursorPos);
 }

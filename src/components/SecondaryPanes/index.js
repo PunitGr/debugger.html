@@ -1,5 +1,5 @@
 // @flow
-import { DOM as dom, PropTypes, Component, createFactory } from "react";
+import React, { PropTypes, Component } from "react";
 import { connect } from "react-redux";
 import { bindActionCreators } from "redux";
 import ImPropTypes from "react-immutable-proptypes";
@@ -16,23 +16,19 @@ import { isEnabled } from "devtools-config";
 import Svg from "../shared/Svg";
 import { prefs } from "../../utils/prefs";
 
-const WhyPaused = createFactory(require("./WhyPaused").default);
-const Breakpoints = createFactory(require("./Breakpoints").default);
+import Breakpoints from "./Breakpoints";
+import Expressions from "./Expressions";
+import SplitBox from "devtools-splitter";
+import Frames from "./Frames";
+import EventListeners from "./EventListeners";
+import Workers from "./Workers";
+import Accordion from "../shared/Accordion";
+import CommandBar from "./CommandBar";
 
-import _Expressions from "./Expressions";
-const Expressions = createFactory(_Expressions);
+import _chromeScopes from "./ChromeScopes";
+import _Scopes from "./Scopes";
 
-import _SplitBox from "devtools-splitter";
-const SplitBox = createFactory(_SplitBox);
-
-const Scopes = isEnabled("chromeScopes")
-  ? createFactory(require("./ChromeScopes").default)
-  : createFactory(require("./Scopes").default);
-
-const Frames = createFactory(require("./Frames").default);
-const EventListeners = createFactory(require("./EventListeners").default);
-const Accordion = createFactory(require("../shared/Accordion").default);
-const CommandBar = createFactory(require("./CommandBar").default);
+const Scopes = isEnabled("chromeScopes") ? _chromeScopes : _Scopes;
 
 import "./SecondaryPanes.css";
 
@@ -40,18 +36,24 @@ type SecondaryPanesItems = {
   header: string,
   component: any,
   opened?: boolean,
-  onToggle?: () => any,
-  shouldOpen?: () => any,
+  onToggle?: () => void,
+  shouldOpen?: () => void,
   buttons?: any
 };
 
 function debugBtn(onClick, type, className, tooltip) {
-  className = `${type} ${className}`;
-  return dom.button(
-    { onClick, className, key: type, title: tooltip },
-    Svg(type, { title: tooltip, "aria-label": tooltip })
+  return (
+    <button
+      onClick={onClick}
+      className={`${type} ${className}`}
+      key={type}
+      title={tooltip}
+    >
+      <Svg name={type} title={tooltip} aria-label={tooltip} />
+    </button>
   );
 }
+debugBtn.displayName = "DebugButton";
 
 class SecondaryPanes extends Component {
   renderBreakpointsToggle() {
@@ -69,14 +71,18 @@ class SecondaryPanes extends Component {
       return null;
     }
 
-    return dom.input({
+    const inputProps = {
       type: "checkbox",
       "aria-label": breakpointsDisabled
         ? L10N.getStr("breakpoints.enable")
         : L10N.getStr("breakpoints.disable"),
       className: boxClassName,
       disabled: breakpointsLoading,
-      onClick: () => toggleAllBreakpoints(!breakpointsDisabled),
+      onChange: e => {
+        e.stopPropagation();
+        toggleAllBreakpoints(!breakpointsDisabled);
+      },
+      onClick: e => e.stopPropagation(),
       checked: !breakpointsDisabled && !isIndeterminate,
       ref: input => {
         if (input) {
@@ -86,7 +92,9 @@ class SecondaryPanes extends Component {
       title: breakpointsDisabled
         ? L10N.getStr("breakpoints.enable")
         : L10N.getStr("breakpoints.disable")
-    });
+    };
+
+    return <input {...inputProps} />;
   }
 
   watchExpressionHeaderButtons() {
@@ -158,7 +166,14 @@ class SecondaryPanes extends Component {
       });
     }
 
-    if (isEnabled("watchExpressions") && this.props.horizontal) {
+    if (isEnabled("workers")) {
+      items.push({
+        header: L10N.getStr("workersHeader"),
+        component: Workers
+      });
+    }
+
+    if (this.props.horizontal) {
       items.unshift(this.getWatchItem());
     }
 
@@ -166,9 +181,7 @@ class SecondaryPanes extends Component {
   }
 
   renderHorizontalLayout() {
-    return Accordion({
-      items: this.getItems()
-    });
+    return <Accordion items={this.getItems()} />;
   }
 
   getEndItems() {
@@ -178,7 +191,7 @@ class SecondaryPanes extends Component {
       items.unshift(this.getScopeItem());
     }
 
-    if (isEnabled("watchExpressions") && !this.props.horizontal) {
+    if (!this.props.horizontal) {
       items.unshift(this.getWatchItem());
     }
 
@@ -190,35 +203,36 @@ class SecondaryPanes extends Component {
   }
 
   renderVerticalLayout() {
-    return SplitBox({
-      style: { width: "100vw" },
-      initialSize: "300px",
-      minSize: 10,
-      maxSize: "50%",
-      splitterSize: 1,
-      startPanel: Accordion({ items: this.getStartItems() }),
-      endPanel: Accordion({ items: this.getEndItems() })
-    });
+    return (
+      <SplitBox
+        style={{ width: "100vw" }}
+        initialSize="300px"
+        minSize={10}
+        maxSize="50%"
+        splitterSize={1}
+        startPanel={<Accordion items={this.getStartItems()} />}
+        endPanel={<Accordion items={this.getEndItems()} />}
+      />
+    );
   }
 
   render() {
-    return dom.div(
-      {
-        className: "secondary-panes",
-        style: { overflowX: "hidden" }
-      },
-      CommandBar(),
-      WhyPaused(),
-      this.props.horizontal
-        ? this.renderHorizontalLayout()
-        : this.renderVerticalLayout()
+    return (
+      <div className="secondary-panes secondary-panes--sticky-commandbar">
+        <CommandBar horizontal={this.props.horizontal} />
+        {this.props.horizontal ? (
+          this.renderHorizontalLayout()
+        ) : (
+          this.renderVerticalLayout()
+        )}
+      </div>
     );
   }
 }
 
 SecondaryPanes.propTypes = {
   evaluateExpressions: PropTypes.func.isRequired,
-  pauseData: ImPropTypes.map,
+  pauseData: PropTypes.object,
   horizontal: PropTypes.bool,
   breakpoints: ImPropTypes.map.isRequired,
   breakpointsDisabled: PropTypes.bool,

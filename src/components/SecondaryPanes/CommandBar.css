@@ -1,13 +1,21 @@
 .command-bar {
-  flex: 0 0 30px;
+  flex: 0 0 29px;
   border-bottom: 1px solid var(--theme-splitter-color);
   display: flex;
-  height: 30px;
+  height: 29px;
   overflow: hidden;
   position: sticky;
   top: 0;
   z-index: 1;
-  background-color: var(--theme-body-background);
+  background-color: var(--theme-toolbar-background);
+}
+
+.command-bar.vertical {
+  width: 100vw;
+}
+
+html[dir="rtl"] .command-bar {
+  border-right: 1px solid var(--theme-splitter-color);
 }
 
 .theme-dark .command-bar {
@@ -20,16 +28,14 @@
   appearance: none;
   background: transparent;
   border: none;
-  cursor: pointer;
   display: inline-block;
   text-align: center;
-  transition: all 0.25s ease;
   padding: 8px 5px;
   position: relative;
   fill: currentColor;
 }
 
-.command-bar > button:hover {
+.command-bar > button:not(.disabled):hover {
   background: var(--theme-toolbar-background-hover);
 }
 
@@ -41,8 +47,12 @@
   margin-inline-end: 0.7em;
 }
 
+.command-bar > button:focus {
+  outline: none;
+}
+
 html .command-bar > button:disabled {
-  opacity: 0.3;
+  opacity: 0.8;
   cursor: default;
 }
 

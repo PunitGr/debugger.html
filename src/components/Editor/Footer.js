@@ -1,30 +1,41 @@
-import React, { Component } from "react";
-import { DOM as dom, PropTypes } from "react";
+import React, { PureComponent } from "react";
 import { connect } from "react-redux";
 import { bindActionCreators } from "redux";
 import actions from "../../actions";
 import {
   getSelectedSource,
-  getSourceText,
   getPrettySource,
   getPaneCollapse
 } from "../../selectors";
 import Svg from "../shared/Svg";
-import ImPropTypes from "react-immutable-proptypes";
+
 import classnames from "classnames";
 import { isEnabled } from "devtools-config";
-import { isPretty } from "../../utils/source";
+import { isPretty, isLoaded } from "../../utils/source";
 import { shouldShowFooter, shouldShowPrettyPrint } from "../../utils/editor";
-import _PaneToggleButton from "../shared/Button/PaneToggle";
-const PaneToggleButton = React.createFactory(_PaneToggleButton);
+
+import PaneToggleButton from "../shared/Button/PaneToggle";
+
+import type { SourceRecord } from "../../reducers/sources";
 
 import "./Footer.css";
 
-class SourceFooter extends Component {
+class SourceFooter extends PureComponent {
+  props: {
+    selectedSource: SourceRecord,
+    selectSource: (string, ?Object) => void,
+    editor: any,
+    togglePrettyPrint: string => void,
+    toggleBlackBox: () => void,
+    recordCoverage: () => void,
+    togglePaneCollapse: () => void,
+    endPanelCollapsed: boolean,
+    horizontal: boolean
+  };
+
   prettyPrintButton() {
-    const { selectedSource, sourceText, togglePrettyPrint } = this.props;
-    const sourceLoaded =
-      selectedSource && sourceText && !sourceText.get("loading");
+    const { selectedSource, togglePrettyPrint } = this.props;
+    const sourceLoaded = selectedSource && isLoaded(selectedSource.toJS());
 
     if (!shouldShowPrettyPrint(selectedSource)) {
       return;
@@ -33,25 +44,25 @@ class SourceFooter extends Component {
     const tooltip = L10N.getStr("sourceTabs.prettyPrint");
     const type = "prettyPrint";
 
-    return dom.button(
-      {
-        onClick: () => togglePrettyPrint(selectedSource.get("id")),
-        className: classnames("action", type, {
+    return (
+      <button
+        onClick={() => togglePrettyPrint(selectedSource.get("id"))}
+        className={classnames("action", type, {
           active: sourceLoaded,
           pretty: isPretty(selectedSource.toJS())
-        }),
-        key: type,
-        title: tooltip,
-        "aria-label": tooltip
-      },
-      Svg(type)
+        })}
+        key={type}
+        title={tooltip}
+        aria-label={tooltip}
+      >
+        <Svg name={type} />
+      </button>
     );
   }
 
   blackBoxButton() {
-    const { selectedSource, sourceText, toggleBlackBox } = this.props;
-    const sourceLoaded =
-      selectedSource && sourceText && !sourceText.get("loading");
+    const { selectedSource, toggleBlackBox } = this.props;
+    const sourceLoaded = selectedSource && isLoaded(selectedSource.toJS());
 
     const blackboxed = selectedSource.get("isBlackBoxed");
 
@@ -62,18 +73,19 @@ class SourceFooter extends Component {
     const tooltip = L10N.getStr("sourceFooter.blackbox");
     const type = "black-box";
 
-    return dom.button(
-      {
-        onClick: () => toggleBlackBox(selectedSource.toJS()),
-        className: classnames("action", type, {
+    return (
+      <button
+        onClick={() => toggleBlackBox(selectedSource.toJS())}
+        className={classnames("action", type, {
           active: sourceLoaded,
-          blackboxed
-        }),
-        key: type,
-        title: tooltip,
-        "aria-label": tooltip
-      },
-      Svg("blackBox")
+          blackboxed: blackboxed
+        })}
+        key={type}
+        title={tooltip}
+        aria-label={tooltip}
+      >
+        <Svg name="blackBox" />
+      </button>
     );
   }
 
@@ -85,9 +97,10 @@ class SourceFooter extends Component {
       return;
     }
 
-    return dom.span(
-      { className: "blackbox-summary" },
-      L10N.getStr("sourceFooter.blackboxed")
+    return (
+      <span className="blackbox-summary">
+        {L10N.getStr("sourceFooter.blackboxed")}
+      </span>
     );
   }
 
@@ -98,14 +111,15 @@ class SourceFooter extends Component {
       return;
     }
 
-    return dom.button(
-      {
-        className: "coverage action",
-        title: "Code Coverage",
-        onClick: () => recordCoverage(),
-        "aria-label": "Code Coverage"
-      },
-      "C"
+    return (
+      <button
+        className="coverage action"
+        title={L10N.getStr("sourceFooter.codeCoverage")}
+        onClick={() => recordCoverage()}
+        aria-label={L10N.getStr("sourceFooter.codeCoverage")}
+      >
+        C
+      </button>
     );
   }
 
@@ -114,12 +128,14 @@ class SourceFooter extends Component {
       return;
     }
 
-    return PaneToggleButton({
-      position: "end",
-      collapsed: !this.props.endPanelCollapsed,
-      horizontal: this.props.horizontal,
-      handleClick: this.props.togglePaneCollapse
-    });
+    return (
+      <PaneToggleButton
+        position="end"
+        collapsed={!this.props.endPanelCollapsed}
+        horizontal={this.props.horizontal}
+        handleClick={this.props.togglePaneCollapse}
+      />
+    );
   }
 
   renderCommands() {
@@ -128,12 +144,13 @@ class SourceFooter extends Component {
       return null;
     }
 
-    return dom.div(
-      { className: "commands" },
-      this.prettyPrintButton(),
-      this.blackBoxButton(),
-      this.blackBoxSummary(),
-      this.coverageButton()
+    return (
+      <div className="commands">
+        {this.prettyPrintButton()}
+        {this.blackBoxButton()}
+        {this.blackBoxSummary()}
+        {this.coverageButton()}
+      </div>
     );
   }
 
@@ -144,26 +161,14 @@ class SourceFooter extends Component {
       return null;
     }
 
-    return dom.div(
-      { className: "source-footer" },
-      this.renderCommands(),
-      this.renderToggleButton()
+    return (
+      <div className="source-footer">
+        {this.renderCommands()}
+        {this.renderToggleButton()}
+      </div>
     );
   }
 }
-
-SourceFooter.propTypes = {
-  selectedSource: ImPropTypes.map,
-  togglePrettyPrint: PropTypes.func,
-  toggleBlackBox: PropTypes.func,
-  recordCoverage: PropTypes.func,
-  sourceText: ImPropTypes.map,
-  selectSource: PropTypes.func,
-  editor: PropTypes.object,
-  endPanelCollapsed: PropTypes.bool,
-  togglePaneCollapse: PropTypes.func,
-  horizontal: PropTypes.bool
-};
 
 SourceFooter.displayName = "SourceFooter";
 
@@ -173,7 +178,6 @@ export default connect(
     const selectedId = selectedSource && selectedSource.get("id");
     return {
       selectedSource,
-      sourceText: getSourceText(state, selectedId),
       prettySource: getPrettySource(state, selectedId),
       endPanelCollapsed: getPaneCollapse(state, "end")
     };

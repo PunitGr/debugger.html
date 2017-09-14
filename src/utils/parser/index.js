@@ -1,17 +1,23 @@
 // @flow
 
-const { workerUtils: { WorkerDispatcher } } = require("devtools-utils");
+import { workerUtils } from "devtools-utils";
+const { WorkerDispatcher } = workerUtils;
 
 const dispatcher = new WorkerDispatcher();
+export const startParserWorker = dispatcher.start.bind(dispatcher);
+export const stopParserWorker = dispatcher.stop.bind(dispatcher);
 
-const getSymbols = dispatcher.task("getSymbols");
-const getVariablesInScope = dispatcher.task("getVariablesInScope");
-const resolveToken = dispatcher.task("resolveToken");
+export const getClosestExpression = dispatcher.task("getClosestExpression");
+export const getSymbols = dispatcher.task("getSymbols");
+export const getVariablesInScope = dispatcher.task("getVariablesInScope");
+export const getOutOfScopeLocations = dispatcher.task("getOutOfScopeLocations");
+export const clearSymbols = dispatcher.task("clearSymbols");
+export const clearASTs = dispatcher.task("clearASTs");
+export const getNextStep = dispatcher.task("getNextStep");
+export const getEmptyLines = dispatcher.task("getEmptyLines");
+export const hasSource = dispatcher.task("hasSource");
+export const setSource = dispatcher.task("setSource");
+export const clearSources = dispatcher.task("clearSources");
 
-module.exports = {
-  getSymbols,
-  getVariablesInScope,
-  resolveToken,
-  startParserWorker: dispatcher.start.bind(dispatcher),
-  stopParserWorker: dispatcher.stop.bind(dispatcher)
-};
+export type { SymbolDeclaration, SymbolDeclarations } from "./getSymbols";
+export type { AstLocation } from "./types";
